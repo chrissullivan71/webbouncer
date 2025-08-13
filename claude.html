@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<!--
+Copyright (c) 2025 Chris Sullivan. All rights reserved.
+
+Bouncing Ball Teleprompter (BBT) - Web Version
+Original Python version created: 2025
+Web conversion: 2025
+
+This software and all associated files, including source code, documentation, 
+and any derivative works, are the exclusive property of Chris Sullivan.
+
+ALL RIGHTS RESERVED. No part of this software may be reproduced, distributed, 
+transmitted, transcribed, stored in a retrieval system, or translated into any 
+human or computer language, in any form or by any means, electronic, mechanical, 
+magnetic, optical, chemical, manual, or otherwise, without the express written 
+permission of the copyright owner, Chris Sullivan.
+
+Unauthorized use, copying, distribution, or modification of this software is 
+strictly prohibited and may result in severe civil and criminal penalties.
+
+For licensing inquiries, contact: Chris Sullivan
+                                 217 Penfield
+                                 Kanata, Ontario, Canada
+                                 K2K 1M8
+                                 Tel. 613-254-5598
+                                 Email chris@sullivanweb.me
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bouncing Ball Teleprompter (BBT)</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1e1e1e;
+            color: white;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        
+        #gameCanvas {
+            display: block;
+            background: #1e1e1e;
+        }
+        
+        #fileInput {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: 1px solid #555;
+            padding: 5px;
+        }
+        
+        #loadingStatus {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            color: #00ff00;
+            padding: 5px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="fileInput" accept=".txt" />
+    <div id="loadingStatus">Loading images...</div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // Global variables
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Resize canvas to fill window
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // Asset loading
+        const ASSET_BASE_URL = 'http://sullivanweb.me/mystuff/bball/';
+        let backgroundImage = null;
+        let controlsImage = null;
+        let magTapeImage = null;
+        let iconImage = null;
+        let assetsLoaded = false;
+        
+        function loadAssets() {
+            const loadingStatus = document.getElementById('loadingStatus');
+            let loadedCount = 0;
+            const totalAssets = 4;
+            
+            function checkComplete() {
+                loadedCount++;
+                loadingStatus.textContent = `Loading images... ${loadedCount}/${totalAssets}`;
+                if (loadedCount === totalAssets) {
+                    assetsLoaded = true;
+                    loadingStatus.style.display = 'none';
+                    console.log('All assets loaded');
+                }
+            }
+            
+            // Load background image
+            backgroundImage = new Image();
+            backgroundImage.onload = checkComplete;
+            backgroundImage.onerror = () => {
+                console.log('Background image failed to load');
+                checkComplete();
+            };
+            backgroundImage.src = ASSET_BASE_URL + 'background.jpg';
+            
+            // Load controls image  
+            controlsImage = new Image();
+            controlsImage.onload = checkComplete;
+            controlsImage.onerror = () => {
+                console.log('Controls image failed to load');
+                checkComplete();
+            };
+            controlsImage.src = ASSET_BASE_URL + 'controls.jpg';
+            
+            // Load mag tape image
+            magTapeImage = new Image();
+            magTapeImage.onload = checkComplete;
+            magTapeImage.onerror = () => {
+                console.log('Mag tape image failed to load');
+                checkComplete();
+            };
+            magTapeImage.src = ASSET_BASE_URL + 'magtape.jpg';
+            
+            // Load icon
+            iconImage = new Image();
+            iconImage.onload = () => {
+                // Set as favicon
+                const link = document.createElement('link');
+                link.type = 'image/png';
+                link.rel = 'icon';
+                link.href = iconImage.src;
+                document.head.appendChild(link);
+                checkComplete();
+            };
+            iconImage.onerror = () => {
+                console.log('Icon failed to load');
+                checkComplete();
+            };
+            iconImage.src = ASSET_BASE_URL + 'icon.png';
+        }
+        
+        // Start loading assets
+        loadAssets();
+        
+        // Game constants
+        const POSITION_TITLE = 120;
+        const POSITION_TIME_SIGNATURE = 150;
+        const POSITION_SECTION = 180;
+        const POSITION_CHORDS = 210;
+        const POSITION_LYRIC_LINE = 240;
+        const BALL_HIGH_POSITION = 230;
+        const BOUNCE_DURATION = 0.898438; // seconds
+        const BOUNCES_PER_LINE = 8;
+        
+        // Game state
+        let songData = [];
+        let sections = [], chords = [], lyrics = [], beats = [];
+        let beatChordWordData = {};
+        let currentIndex = 0;
+        let bounceCount = 0;
+        let waitingForStart = true;
+        let songPaused = false;
+        let running = true;
+        let songLineNumber = 1;
+        
+        // Ball physics
+        let ballY = BALL_HIGH_POSITION;
+        let ballCenterX = 0;
+        const ballRadius = 25;
+        const ballTop = BALL_HIGH_POSITION;
+        let ballBottom = 0;
+        let bounceStartTime = null;
+        let gravity = 0;
+        let rising = false;
+        let falling = true;
+        
+        // Initialize ball physics
+        function initBallPhysics() {
+            ballCenterX = canvas.width / 2;
+            ballBottom = canvas.height - 100;
+            const fallTime = BOUNCE_DURATION / 2;
+            const bounceHeight = ballBottom - ballTop;
+            gravity = (2 * bounceHeight) / (fallTime ** 2);
+        }
+        
+        // Utility functions from Python version
+        function cleanText(text) {
+            return text.trim();
+        }
+        
+        function getRidOfLL(cleanedLine) {
+            cleanedLine = cleanedLine.replace(/\t/g, '    '); // Convert tabs to spaces
+            
+            if (cleanedLine.includes('LL')) {
+                const llIndex = cleanedLine.indexOf('LL');
+                cleanedLine = cleanedLine.substring(0, llIndex).trimEnd();
+                
+                if (cleanedLine.includes('ZZZ')) {
+                    const zzzIndex = cleanedLine.indexOf('ZZZ');
+                    cleanedLine = cleanedLine.substring(0, zzzIndex).trimEnd();
+                }
+            }
+            return cleanedLine;
+        }
+        
+        function findBeatPositions(beatLine) {
+            const beats = [];
+            const regex = /\d+/g;
+            let match;
+            while ((match = regex.exec(beatLine)) !== null) {
+                const beatNum = parseInt(match[0]);
+                if (beatNum >= 1 && beatNum <= 9) {
+                    beats.push([beatNum, match.index]);
+                }
+            }
+            return beats;
+        }
+        
+        function extractItemAtPosition(line, charIndex) {
+            if (charIndex >= line.length) return "";
+            
+            let start = charIndex;
+            while (start > 0 && line[start-1] !== ' ') {
+                start--;
+            }
+            
+            let end = charIndex;
+            while (end < line.length && line[end] !== ' ') {
+                end++;
+            }
+            
+            return line.substring(start, end).trim();
+        }
+        
+        function extractChordsAndWords(chordLine, lyricLine, beatPositions) {
+            const results = [];
+            for (const [beatNum, charIndex] of beatPositions) {
+                const chord = extractItemAtPosition(chordLine, charIndex);
+                const word = extractItemAtPosition(lyricLine, charIndex);
+                results.push([beatNum, chord, word]);
+            }
+            return results;
+        }
+        
+        // CHORDS array (simplified for web version)
+        const CHORDS = [
+            "C", "D", "E", "F", "G", "A", "B",
+            "Cm", "Dm", "Em", "Fm", "Gm", "Am", "Bm",
+            "C7", "D7", "E7", "F7", "G7", "A7", "B7",
+            "Cm7", "Dm7", "Em7", "Fm7", "Gm7", "Am7", "Bm7"
+        ];
+        
+        function checkForChordLine(line, chords) {
+            if (!line) return false;
+            const words = line.split(/\s+/);
+            const thirtyPercentCount = Math.floor(0.4 * words.length);
+            let matchCount = 0;
+            
+            for (const char of line) {
+                if (chords.includes(char)) {
+                    matchCount++;
+                }
+            }
+            return matchCount >= thirtyPercentCount;
+        }
+        
+        function categorizeLine(line) {
+            const cleanedLine = cleanText(line);
+            
+            if (cleanedLine.includes('[') && cleanedLine.includes(']')) {
+                return "sections";
+            }
+            
+            if (checkForChordLine(cleanedLine, CHORDS)) {
+                return "chords";
+            }
+            
+            const pattern = /[a-zA-Z\s]+/;
+            if (pattern.test(cleanedLine)) {
+                if (!cleanedLine.includes('ZZZ')) {
+                    return "lyrics";
+                } else if (cleanedLine.includes('ZZZ')) {
+                    return "beats";
+                }
+            }
+            
+            return "unknown";
+        }
+        
+        // File processing
+        function processSongData(data) {
+            const lines = data.split('\n').filter(line => line.trim());
+            
+            // Extract title and time signature
+            const title = lines[0] || "[No title]";
+            const timeSignature = lines[1] || "[No time signature]";
+            const remainingLines = lines.slice(2);
+            
+            // Reset arrays
+            sections = [];
+            chords = [];
+            lyrics = [];
+            beats = [];
+            beatChordWordData = {};
+            
+            // Categorize lines
+            for (let i = 0; i < remainingLines.length; i++) {
+                const line = remainingLines[i];
+                const lineType = categorizeLine(line);
+                
+                if (lineType === "sections") {
+                    sections.push(line);
+                } else if (lineType === "chords") {
+                    chords.push(line);
+                } else if (lineType === "lyrics") {
+                    lyrics.push(line);
+                } else if (lineType === "beats") {
+                    beats.push(line);
+                    
+                    // Extract chord/word data
+                    const cleanedBeatLine = getRidOfLL(line);
+                    const beatPositions = findBeatPositions(cleanedBeatLine);
+                    const beatLineIndex = beats.length - 1;
+                    
+                    if (beatLineIndex < chords.length && beatLineIndex < lyrics.length) {
+                        const chordLine = getRidOfLL(chords[beatLineIndex]);
+                        const lyricLine = getRidOfLL(lyrics[beatLineIndex]);
+                        const chordWordData = extractChordsAndWords(chordLine, lyricLine, beatPositions);
+                        beatChordWordData[beatLineIndex] = chordWordData;
+                    }
+                }
+            }
+            
+            // Clean all lines
+            for (let i = 0; i < Math.max(lyrics.length, chords.length, beats.length, sections.length); i++) {
+                if (i < lyrics.length) lyrics[i] = getRidOfLL(lyrics[i]);
+                if (i < chords.length) chords[i] = getRidOfLL(chords[i]);
+                if (i < beats.length) beats[i] = getRidOfLL(beats[i]);
+                if (i < sections.length) sections[i] = getRidOfLL(sections[i]);
+            }
+            
+            console.log(`Loaded: ${sections.length} sections, ${chords.length} chords, ${lyrics.length} lyrics, ${beats.length} beats`);
+            
+            // Store for rendering
+            songData.title = title;
+            songData.timeSignature = timeSignature;
+        }
+        
+        // File input handler
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file && file.type === 'text/plain') {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    processSongData(e.target.result);
+                    initBallPhysics();
+                    resetSong();
+                };
+                reader.readAsText(file);
+            }
+        });
+        
+        // Color interpolation
+        function interpolateColor(color1, color2, factor) {
+            const r = Math.floor(color1[0] + (color2[0] - color1[0]) * factor);
+            const g = Math.floor(color1[1] + (color2[1] - color1[1]) * factor);
+            const b = Math.floor(color1[2] + (color2[2] - color1[2]) * factor);
+            return [r, g, b];
+        }
+        
+        function colorToString(color) {
+            return `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+        }
+        
+        // Reset song state
+        function resetSong() {
+            currentIndex = 0;
+            bounceCount = 0;
+            ballY = BALL_HIGH_POSITION;
+            bounceStartTime = null;
+            songPaused = false;
+            songLineNumber = 1;
+            rising = false;
+            falling = true;
+        }
+        
+        // Input handling
+        let pauseTime = 0;
+        document.addEventListener('keydown', function(e) {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (waitingForStart) {
+                    if (currentIndex > 0) {
+                        // At end of song, restart from beginning
+                        resetSong();
+                    }
+                    waitingForStart = false;
+                    bounceStartTime = performance.now() / 1000;
+                } else if (songPaused) {
+                    // Resume from pause
+                    const pauseDuration = (performance.now() / 1000) - pauseTime;
+                    bounceStartTime += pauseDuration;
+                    songPaused = false;
+                } else {
+                    // Pause the song
+                    songPaused = true;
+                    pauseTime = performance.now() / 1000;
+                }
+            } else if (e.code === 'Escape' || e.code === 'KeyQ') {
+                // Stop the application
+                running = false;
+                console.log("Application stopped");
+            }
+        });
+        
+        // Rendering functions
+        function renderText(text, x, y, color, fontSize = 40) {
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            ctx.fillStyle = colorToString(color);
+            ctx.fillText(text, x, y);
+        }
+        
+        function calculatePixelPosition(text, x, charIndex, fontSize = 40) {
+            if (charIndex >= text.length) return x;
+            
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            const textBefore = text.substring(0, charIndex);
+            const width = ctx.measureText(textBefore).width;
+            return x + width;
+        }
+        
+        function renderWordAtPosition(word, x, y, color, fontSize = 40) {
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            ctx.fillStyle = colorToString(color);
+            ctx.fillText(word, x, y);
+        }
+        
+        // Main render function
+        function render() {
+            const currentTime = performance.now() / 1000;
+            
+            // Clear canvas
+            ctx.fillStyle = '#1e1e1e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw background image if loaded
+            if (backgroundImage && backgroundImage.complete) {
+                ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+            }
+            
+            // Draw mag tape at top if loaded
+            if (magTapeImage && magTapeImage.complete) {
+                const tapeHeight = canvas.height / 8;
+                ctx.drawImage(magTapeImage, 0, 0, canvas.width, tapeHeight);
+                
+                // Draw progress indicator if not waiting for start
+                if (!waitingForStart && lyrics.length > 0) {
+                    const indicatorWidth = 8;
+                    const positionX = (currentIndex / lyrics.length) * canvas.width;
+                    const indicatorHeight = tapeHeight / 2;
+                    const indicatorY = tapeHeight / 4;
+                    
+                    const rectX = Math.max(0, Math.min(positionX - indicatorWidth / 2, canvas.width - indicatorWidth));
+                    
+                    // Draw green rectangle
+                    ctx.fillStyle = '#00ff00';
+                    ctx.fillRect(rectX, indicatorY, indicatorWidth, indicatorHeight);
+                    
+                    // Draw white circle
+                    ctx.beginPath();
+                    ctx.arc(rectX + indicatorWidth / 2, indicatorY + indicatorHeight / 2, 5, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fill();
+                }
+            }
+            
+            // Draw controls at bottom left if loaded
+            if (controlsImage && controlsImage.complete) {
+                const controlsHeight = canvas.height / 3 + 72;
+                const controlsWidth = (controlsImage.width * controlsHeight) / controlsImage.height;
+                const controlsY = canvas.height - controlsHeight - 20;
+                const controlsX = 20;
+                
+                ctx.drawImage(controlsImage, controlsX, controlsY, controlsWidth, controlsHeight);
+                
+                // Draw line counter on top of controls
+                if (!waitingForStart) {
+                    ctx.font = 'bold 40px Courier New';
+                    ctx.fillStyle = '#00ff00';
+                    const progressText = String(songLineNumber).padStart(3, '0');
+                    ctx.fillText(progressText, controlsX + 50, controlsY + 60);
+                }
+            }
+            
+            // Always display title and time signature
+            if (songData.title) {
+                renderText(songData.title, 50, POSITION_TITLE, [0, 255, 0]);
+            }
+            if (songData.timeSignature) {
+                renderText(songData.timeSignature, 50, POSITION_TIME_SIGNATURE, [0, 255, 0]);
+            }
+            
+            // Show instructions
+            if (waitingForStart) {
+                const message = currentIndex === 0 ? "Spacebar to bounce" : "Press spacebar to restart";
+                renderText(message, canvas.width - 400, canvas.height - 100, [255, 255, 255]);
+            }
+            
+            // Render current song line
+            if (lyrics.length > 0 && chords.length > 0 && ((!waitingForStart) || (waitingForStart && currentIndex > 0))) {
+                const chordText = chords[currentIndex % chords.length].replace(/\[|\]/g, '');
+                const lyricText = lyrics[currentIndex % lyrics.length];
+                
+                //
