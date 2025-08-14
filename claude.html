@@ -1,29 +1,6 @@
 <!DOCTYPE html>
 <!--
 Copyright (c) 2025 Chris Sullivan. All rights reserved.
-
-Bouncing Ball Teleprompter (BBT) - Web Version
-Original Python version created: 2025
-Web conversion: 2025
-
-This software and all associated files, including source code, documentation, 
-and any derivative works, are the exclusive property of Chris Sullivan.
-
-ALL RIGHTS RESERVED. No part of this software may be reproduced, distributed, 
-transmitted, transcribed, stored in a retrieval system, or translated into any 
-human or computer language, in any form or by any means, electronic, mechanical, 
-magnetic, optical, chemical, manual, or otherwise, without the express written 
-permission of the copyright owner, Chris Sullivan.
-
-Unauthorized use, copying, distribution, or modification of this software is 
-strictly prohibited and may result in severe civil and criminal penalties.
-
-For licensing inquiries, contact: Chris Sullivan
-                                 217 Penfield
-                                 Kanata, Ontario, Canada
-                                 K2K 1M8
-                                 Tel. 613-254-5598
-                                 Email chris@sullivanweb.me
 -->
 <html lang="en">
 <head>
@@ -74,11 +51,9 @@ For licensing inquiries, contact: Chris Sullivan
     <canvas id="gameCanvas"></canvas>
 
     <script>
-        // Global variables
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
-        // Resize canvas to fill window
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -86,89 +61,59 @@ For licensing inquiries, contact: Chris Sullivan
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
         
-        // Asset loading - load from same directory as HTML file
+        // FIXED: Load from GitHub, not sullivanweb.me
         const ASSET_BASE_URL = '';
         let backgroundImage = null;
         let controlsImage = null;
         let magTapeImage = null;
         let iconImage = null;
-        let assetsLoaded = false;
         
         function loadAssets() {
             const loadingStatus = document.getElementById('loadingStatus');
             let loadedCount = 0;
-            const totalAssets = 4;
             
             function checkComplete() {
                 loadedCount++;
-                loadingStatus.textContent = `Loading images... ${loadedCount}/${totalAssets}`;
-                if (loadedCount === totalAssets) {
-                    assetsLoaded = true;
+                loadingStatus.textContent = `Loading images... ${loadedCount}/4`;
+                if (loadedCount === 4) {
                     loadingStatus.style.display = 'none';
                     console.log('All assets loaded');
                 }
             }
             
-            // Load background image
             backgroundImage = new Image();
             backgroundImage.onload = checkComplete;
-            backgroundImage.onerror = () => {
-                console.log('Background image failed to load');
-                checkComplete();
-            };
-            backgroundImage.src = ASSET_BASE_URL + 'background.jpg';
+            backgroundImage.onerror = checkComplete;
+            backgroundImage.src = 'background.jpg';
             
-            // Load controls image  
             controlsImage = new Image();
             controlsImage.onload = checkComplete;
-            controlsImage.onerror = () => {
-                console.log('Controls image failed to load');
-                checkComplete();
-            };
-            controlsImage.src = ASSET_BASE_URL + 'controls.jpg';
+            controlsImage.onerror = checkComplete;
+            controlsImage.src = 'controls.jpg';
             
-            // Load mag tape image
             magTapeImage = new Image();
             magTapeImage.onload = checkComplete;
-            magTapeImage.onerror = () => {
-                console.log('Mag tape image failed to load');
-                checkComplete();
-            };
-            magTapeImage.src = ASSET_BASE_URL + 'magtape.jpg';
+            magTapeImage.onerror = checkComplete;
+            magTapeImage.src = 'magtape.jpg';
             
-            // Load icon
             iconImage = new Image();
-            iconImage.onload = () => {
-                // Set as favicon
-                const link = document.createElement('link');
-                link.type = 'image/png';
-                link.rel = 'icon';
-                link.href = iconImage.src;
-                document.head.appendChild(link);
-                checkComplete();
-            };
-            iconImage.onerror = () => {
-                console.log('Icon failed to load');
-                checkComplete();
-            };
-            iconImage.src = ASSET_BASE_URL + 'icon.png';
+            iconImage.onload = checkComplete;
+            iconImage.onerror = checkComplete;
+            iconImage.src = 'icon.png';
         }
         
-        // Start loading assets
         loadAssets();
         
-        // Game constants
         const POSITION_TITLE = 120;
         const POSITION_TIME_SIGNATURE = 150;
         const POSITION_SECTION = 180;
         const POSITION_CHORDS = 210;
         const POSITION_LYRIC_LINE = 240;
         const BALL_HIGH_POSITION = 230;
-        const BOUNCE_DURATION = 0.898438; // seconds
+        const BOUNCE_DURATION = 0.898438;
         const BOUNCES_PER_LINE = 8;
         
-        // Game state
-        let songData = [];
+        let songData = {};
         let sections = [], chords = [], lyrics = [], beats = [];
         let beatChordWordData = {};
         let currentIndex = 0;
@@ -178,7 +123,6 @@ For licensing inquiries, contact: Chris Sullivan
         let running = true;
         let songLineNumber = 1;
         
-        // Ball physics
         let ballY = BALL_HIGH_POSITION;
         let ballCenterX = 0;
         const ballRadius = 25;
@@ -189,7 +133,6 @@ For licensing inquiries, contact: Chris Sullivan
         let rising = false;
         let falling = true;
         
-        // Initialize ball physics
         function initBallPhysics() {
             ballCenterX = canvas.width / 2;
             ballBottom = canvas.height - 100;
@@ -198,13 +141,12 @@ For licensing inquiries, contact: Chris Sullivan
             gravity = (2 * bounceHeight) / (fallTime ** 2);
         }
         
-        // Utility functions from Python version
         function cleanText(text) {
             return text.trim();
         }
         
         function getRidOfLL(cleanedLine) {
-            cleanedLine = cleanedLine.replace(/\t/g, '    '); // Convert tabs to spaces
+            cleanedLine = cleanedLine.replace(/\t/g, '    ');
             
             if (cleanedLine.includes('LL')) {
                 const llIndex = cleanedLine.indexOf('LL');
@@ -257,7 +199,6 @@ For licensing inquiries, contact: Chris Sullivan
             return results;
         }
         
-        // CHORDS array (simplified for web version)
         const CHORDS = [
             "C", "D", "E", "F", "G", "A", "B",
             "Cm", "Dm", "Em", "Fm", "Gm", "Am", "Bm",
@@ -265,14 +206,16 @@ For licensing inquiries, contact: Chris Sullivan
             "Cm7", "Dm7", "Em7", "Fm7", "Gm7", "Am7", "Bm7"
         ];
         
+        // FIXED: Check words, not individual characters
         function checkForChordLine(line, chords) {
             if (!line) return false;
-            const words = line.split(/\s+/);
+            const words = line.split(/\s+/).filter(word => word.trim());
             const thirtyPercentCount = Math.floor(0.4 * words.length);
             let matchCount = 0;
             
-            for (const char of line) {
-                if (chords.includes(char)) {
+            for (const word of words) {
+                const cleanWord = word.replace(/[\[\]]/g, '');
+                if (chords.includes(cleanWord)) {
                     matchCount++;
                 }
             }
@@ -302,23 +245,19 @@ For licensing inquiries, contact: Chris Sullivan
             return "unknown";
         }
         
-        // File processing
         function processSongData(data) {
             const lines = data.split('\n').filter(line => line.trim());
             
-            // Extract title and time signature
             const title = lines[0] || "[No title]";
             const timeSignature = lines[1] || "[No time signature]";
             const remainingLines = lines.slice(2);
             
-            // Reset arrays
             sections = [];
             chords = [];
             lyrics = [];
             beats = [];
             beatChordWordData = {};
             
-            // Categorize lines
             for (let i = 0; i < remainingLines.length; i++) {
                 const line = remainingLines[i];
                 const lineType = categorizeLine(line);
@@ -332,7 +271,6 @@ For licensing inquiries, contact: Chris Sullivan
                 } else if (lineType === "beats") {
                     beats.push(line);
                     
-                    // Extract chord/word data
                     const cleanedBeatLine = getRidOfLL(line);
                     const beatPositions = findBeatPositions(cleanedBeatLine);
                     const beatLineIndex = beats.length - 1;
@@ -346,7 +284,6 @@ For licensing inquiries, contact: Chris Sullivan
                 }
             }
             
-            // Clean all lines
             for (let i = 0; i < Math.max(lyrics.length, chords.length, beats.length, sections.length); i++) {
                 if (i < lyrics.length) lyrics[i] = getRidOfLL(lyrics[i]);
                 if (i < chords.length) chords[i] = getRidOfLL(chords[i]);
@@ -356,12 +293,10 @@ For licensing inquiries, contact: Chris Sullivan
             
             console.log(`Loaded: ${sections.length} sections, ${chords.length} chords, ${lyrics.length} lyrics, ${beats.length} beats`);
             
-            // Store for rendering
             songData.title = title;
             songData.timeSignature = timeSignature;
         }
         
-        // File input handler
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file && file.type === 'text/plain') {
@@ -375,7 +310,6 @@ For licensing inquiries, contact: Chris Sullivan
             }
         });
         
-        // Color interpolation
         function interpolateColor(color1, color2, factor) {
             const r = Math.floor(color1[0] + (color2[0] - color1[0]) * factor);
             const g = Math.floor(color1[1] + (color2[1] - color1[1]) * factor);
@@ -387,7 +321,6 @@ For licensing inquiries, contact: Chris Sullivan
             return `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
         }
         
-        // Reset song state
         function resetSong() {
             currentIndex = 0;
             bounceCount = 0;
@@ -399,36 +332,29 @@ For licensing inquiries, contact: Chris Sullivan
             falling = true;
         }
         
-        // Input handling
         let pauseTime = 0;
         document.addEventListener('keydown', function(e) {
             if (e.code === 'Space') {
                 e.preventDefault();
                 if (waitingForStart) {
                     if (currentIndex > 0) {
-                        // At end of song, restart from beginning
                         resetSong();
                     }
                     waitingForStart = false;
                     bounceStartTime = performance.now() / 1000;
                 } else if (songPaused) {
-                    // Resume from pause
                     const pauseDuration = (performance.now() / 1000) - pauseTime;
                     bounceStartTime += pauseDuration;
                     songPaused = false;
                 } else {
-                    // Pause the song
                     songPaused = true;
                     pauseTime = performance.now() / 1000;
                 }
             } else if (e.code === 'Escape' || e.code === 'KeyQ') {
-                // Stop the application
                 running = false;
-                console.log("Application stopped");
             }
         });
         
-        // Rendering functions
         function renderText(text, x, y, color, fontSize = 40) {
             ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
             ctx.fillStyle = colorToString(color);
@@ -450,25 +376,20 @@ For licensing inquiries, contact: Chris Sullivan
             ctx.fillText(word, x, y);
         }
         
-        // Main render function
         function render() {
             const currentTime = performance.now() / 1000;
             
-            // Clear canvas
             ctx.fillStyle = '#1e1e1e';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Draw background image if loaded
             if (backgroundImage && backgroundImage.complete) {
                 ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
             }
             
-            // Draw mag tape at top if loaded
             if (magTapeImage && magTapeImage.complete) {
                 const tapeHeight = canvas.height / 8;
                 ctx.drawImage(magTapeImage, 0, 0, canvas.width, tapeHeight);
                 
-                // Draw progress indicator if not waiting for start
                 if (!waitingForStart && lyrics.length > 0) {
                     const indicatorWidth = 8;
                     const positionX = (currentIndex / lyrics.length) * canvas.width;
@@ -477,11 +398,9 @@ For licensing inquiries, contact: Chris Sullivan
                     
                     const rectX = Math.max(0, Math.min(positionX - indicatorWidth / 2, canvas.width - indicatorWidth));
                     
-                    // Draw green rectangle
                     ctx.fillStyle = '#00ff00';
                     ctx.fillRect(rectX, indicatorY, indicatorWidth, indicatorHeight);
                     
-                    // Draw white circle
                     ctx.beginPath();
                     ctx.arc(rectX + indicatorWidth / 2, indicatorY + indicatorHeight / 2, 5, 0, 2 * Math.PI);
                     ctx.fillStyle = '#ffffff';
@@ -489,7 +408,6 @@ For licensing inquiries, contact: Chris Sullivan
                 }
             }
             
-            // Draw controls at bottom left if loaded
             if (controlsImage && controlsImage.complete) {
                 const controlsHeight = canvas.height / 3 + 72;
                 const controlsWidth = (controlsImage.width * controlsHeight) / controlsImage.height;
@@ -498,7 +416,6 @@ For licensing inquiries, contact: Chris Sullivan
                 
                 ctx.drawImage(controlsImage, controlsX, controlsY, controlsWidth, controlsHeight);
                 
-                // Draw line counter on top of controls
                 if (!waitingForStart) {
                     ctx.font = 'bold 40px Courier New';
                     ctx.fillStyle = '#00ff00';
@@ -507,7 +424,6 @@ For licensing inquiries, contact: Chris Sullivan
                 }
             }
             
-            // Always display title and time signature
             if (songData.title) {
                 renderText(songData.title, 50, POSITION_TITLE, [0, 255, 0]);
             }
@@ -515,18 +431,15 @@ For licensing inquiries, contact: Chris Sullivan
                 renderText(songData.timeSignature, 50, POSITION_TIME_SIGNATURE, [0, 255, 0]);
             }
             
-            // Show instructions
             if (waitingForStart) {
                 const message = currentIndex === 0 ? "Spacebar to bounce" : "Press spacebar to restart";
                 renderText(message, canvas.width - 400, canvas.height - 100, [255, 255, 255]);
             }
             
-            // Render current song line
             if (lyrics.length > 0 && chords.length > 0 && ((!waitingForStart) || (waitingForStart && currentIndex > 0))) {
                 const chordText = chords[currentIndex % chords.length].replace(/\[|\]/g, '');
                 const lyricText = lyrics[currentIndex % lyrics.length];
                 
-                // Check for highlighting
                 let highlightingActive = false;
                 const shouldHighlightBall = currentIndex in beatChordWordData && rising;
                 
@@ -538,16 +451,13 @@ For licensing inquiries, contact: Chris Sullivan
                         if (beatNum === currentBeatNumber) {
                             highlightingActive = true;
                             
-                            // Calculate highlight colors
                             const dt = currentTime - bounceStartTime;
                             const beatProgress = (dt % BOUNCE_DURATION) / BOUNCE_DURATION;
                             const beatFactor = rising ? beatProgress : (1.0 - beatProgress);
                             
-                            // Render normal text first
                             renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
                             renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
                             
-                            // Find beat positions and render highlights
                             const beatPositions = findBeatPositions(getRidOfLL(beats[currentIndex]));
                             
                             for (const [bNum, charIndex] of beatPositions) {
@@ -556,7 +466,6 @@ For licensing inquiries, contact: Chris Sullivan
                                         const pixelX = calculatePixelPosition(lyricText, 50, charIndex);
                                         const highlightColor = interpolateColor([255, 255, 255], [0, 255, 255], beatFactor);
                                         
-                                        // Erase background (simple approach)
                                         ctx.fillStyle = '#1e1e1e';
                                         const wordWidth = ctx.measureText(word).width;
                                         ctx.fillRect(pixelX, POSITION_LYRIC_LINE - 35, wordWidth, 45);
@@ -568,7 +477,6 @@ For licensing inquiries, contact: Chris Sullivan
                                         const pixelX = calculatePixelPosition(chordText, 50, charIndex);
                                         const highlightColor = interpolateColor([255, 165, 0], [255, 255, 0], beatFactor);
                                         
-                                        // Erase background
                                         ctx.fillStyle = '#1e1e1e';
                                         const chordWidth = ctx.measureText(chord).width;
                                         ctx.fillRect(pixelX, POSITION_CHORDS - 35, chordWidth, 45);
@@ -584,18 +492,15 @@ For licensing inquiries, contact: Chris Sullivan
                 }
                 
                 if (!highlightingActive) {
-                    // Normal rendering
                     renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
                     renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
                 }
                 
-                // Render section
                 if (sections.length > 0) {
                     renderText(sections[currentIndex % sections.length], 50, POSITION_SECTION, [0, 0, 255]);
                 }
             }
             
-            // Ball physics and rendering
             if (!songPaused && !waitingForStart && bounceStartTime !== null) {
                 const dt = currentTime - bounceStartTime;
                 
@@ -616,22 +521,18 @@ For licensing inquiries, contact: Chris Sullivan
                         if (ballY < ballTop) ballY = ballTop;
                     }
                 } else {
-                    // Complete bounce cycle
                     bounceStartTime = currentTime;
                     ballY = ballTop;
                     bounceCount++;
                     
-                    // Advance text every 8 bounces
                     if (bounceCount >= BOUNCES_PER_LINE) {
                         bounceCount = 0;
                         if (lyrics.length > 0) {
                             if (currentIndex < lyrics.length - 1) {
                                 currentIndex++;
                                 songLineNumber++;
-                                console.log(`Advanced to line ${songLineNumber}, index ${currentIndex}`);
                             } else {
                                 waitingForStart = true;
-                                console.log("Reached end of song, waiting for restart");
                             }
                         }
                     }
@@ -640,7 +541,6 @@ For licensing inquiries, contact: Chris Sullivan
                 ballY = BALL_HIGH_POSITION;
             }
             
-            // Draw ball
             const shouldHighlightBall = currentIndex in beatChordWordData && rising && 
                 beatChordWordData[currentIndex].some(([beatNum]) => beatNum === bounceCount + 1);
             
@@ -649,18 +549,11 @@ For licensing inquiries, contact: Chris Sullivan
             ctx.fillStyle = shouldHighlightBall ? '#00ff00' : '#ee7621';
             ctx.fill();
             
-            // Continue animation
             if (running) {
                 requestAnimationFrame(render);
-            } else {
-                // Show stopped message
-                ctx.fillStyle = 'red';
-                ctx.font = 'bold 48px Arial';
-                ctx.fillText('STOPPED - Refresh to restart', canvas.width/2 - 200, canvas.height/2);
             }
         }
         
-        // Start the application
         initBallPhysics();
         render();
     </script>
