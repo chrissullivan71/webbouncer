@@ -86,8 +86,8 @@ For licensing inquiries, contact: Chris Sullivan
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
         
-        // Asset loading
-        const ASSET_BASE_URL = 'http://sullivanweb.me/mystuff/bball/';
+        // Asset loading - load from same directory as HTML file
+        const ASSET_BASE_URL = '';
         let backgroundImage = null;
         let controlsImage = null;
         let magTapeImage = null;
@@ -526,4 +526,143 @@ For licensing inquiries, contact: Chris Sullivan
                 const chordText = chords[currentIndex % chords.length].replace(/\[|\]/g, '');
                 const lyricText = lyrics[currentIndex % lyrics.length];
                 
-                //
+                // Check for highlighting
+                let highlightingActive = false;
+                const shouldHighlightBall = currentIndex in beatChordWordData && rising;
+                
+                if (shouldHighlightBall) {
+                    const currentBeatData = beatChordWordData[currentIndex];
+                    const currentBeatNumber = bounceCount + 1;
+                    
+                    for (const [beatNum, chord, word] of currentBeatData) {
+                        if (beatNum === currentBeatNumber) {
+                            highlightingActive = true;
+                            
+                            // Calculate highlight colors
+                            const dt = currentTime - bounceStartTime;
+                            const beatProgress = (dt % BOUNCE_DURATION) / BOUNCE_DURATION;
+                            const beatFactor = rising ? beatProgress : (1.0 - beatProgress);
+                            
+                            // Render normal text first
+                            renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+                            renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
+                            
+                            // Find beat positions and render highlights
+                            const beatPositions = findBeatPositions(getRidOfLL(beats[currentIndex]));
+                            
+                            for (const [bNum, charIndex] of beatPositions) {
+                                if (bNum === beatNum) {
+                                    if (word) {
+                                        const pixelX = calculatePixelPosition(lyricText, 50, charIndex);
+                                        const highlightColor = interpolateColor([255, 255, 255], [0, 255, 255], beatFactor);
+                                        
+                                        // Erase background (simple approach)
+                                        ctx.fillStyle = '#1e1e1e';
+                                        const wordWidth = ctx.measureText(word).width;
+                                        ctx.fillRect(pixelX, POSITION_LYRIC_LINE - 35, wordWidth, 45);
+                                        
+                                        renderWordAtPosition(word, pixelX, POSITION_LYRIC_LINE, highlightColor);
+                                    }
+                                    
+                                    if (chord) {
+                                        const pixelX = calculatePixelPosition(chordText, 50, charIndex);
+                                        const highlightColor = interpolateColor([255, 165, 0], [255, 255, 0], beatFactor);
+                                        
+                                        // Erase background
+                                        ctx.fillStyle = '#1e1e1e';
+                                        const chordWidth = ctx.measureText(chord).width;
+                                        ctx.fillRect(pixelX, POSITION_CHORDS - 35, chordWidth, 45);
+                                        
+                                        renderWordAtPosition(chord, pixelX, POSITION_CHORDS, highlightColor);
+                                    }
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                
+                if (!highlightingActive) {
+                    // Normal rendering
+                    renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+                    renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
+                }
+                
+                // Render section
+                if (sections.length > 0) {
+                    renderText(sections[currentIndex % sections.length], 50, POSITION_SECTION, [0, 0, 255]);
+                }
+            }
+            
+            // Ball physics and rendering
+            if (!songPaused && !waitingForStart && bounceStartTime !== null) {
+                const dt = currentTime - bounceStartTime;
+                
+                if (dt <= BOUNCE_DURATION) {
+                    const fallTime = BOUNCE_DURATION / 2;
+                    
+                    if (dt <= fallTime) {
+                        falling = true;
+                        rising = false;
+                        ballY = ballTop + 0.5 * gravity * (dt ** 2);
+                        if (ballY >= ballBottom) ballY = ballBottom;
+                    } else {
+                        const riseTime = dt - fallTime;
+                        falling = false;
+                        rising = true;
+                        const remainingRiseTime = fallTime - riseTime;
+                        ballY = ballTop + 0.5 * gravity * (remainingRiseTime ** 2);
+                        if (ballY < ballTop) ballY = ballTop;
+                    }
+                } else {
+                    // Complete bounce cycle
+                    bounceStartTime = currentTime;
+                    ballY = ballTop;
+                    bounceCount++;
+                    
+                    // Advance text every 8 bounces
+                    if (bounceCount >= BOUNCES_PER_LINE) {
+                        bounceCount = 0;
+                        if (lyrics.length > 0) {
+                            if (currentIndex < lyrics.length - 1) {
+                                currentIndex++;
+                                songLineNumber++;
+                                console.log(`Advanced to line ${songLineNumber}, index ${currentIndex}`);
+                            } else {
+                                waitingForStart = true;
+                                console.log("Reached end of song, waiting for restart");
+                            }
+                        }
+                    }
+                }
+            } else if (waitingForStart) {
+                ballY = BALL_HIGH_POSITION;
+            }
+            
+            // Draw ball
+            const shouldHighlightBall = currentIndex in beatChordWordData && rising && 
+                beatChordWordData[currentIndex].some(([beatNum]) => beatNum === bounceCount + 1);
+            
+            ctx.beginPath();
+            ctx.arc(ballCenterX, ballY, ballRadius, 0, 2 * Math.PI);
+            ctx.fillStyle = shouldHighlightBall ? '#00ff00' : '#ee7621';
+            ctx.fill();
+            
+            // Continue animation
+            if (running) {
+                requestAnimationFrame(render);
+            } else {
+                // Show stopped message
+                ctx.fillStyle = 'red';
+                ctx.font = 'bold 48px Arial';
+                ctx.fillText('STOPPED - Refresh to restart', canvas.width/2 - 200, canvas.height/2);
+            }
+        }
+        
+        // Start the application
+        initBallPhysics();
+        render();
+    </script>
+</body>
+</html>
