@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<!--
+Copyright (c) 2025 Chris Sullivan. All rights reserved.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bouncing Ball Teleprompter (BBT)</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1e1e1e;
+            color: white;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            user-select: none; /* Prevent text selection on mobile */
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        
+        #gameCanvas {
+            display: block;
+            background: #1e1e1e;
+            cursor: pointer;
+        }
+        
+        #fileInput {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: 1px solid #555;
+            padding: 5px;
+            display: none; /* Hidden by default */
+        }
+        
+        #loadingStatus {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            color: #00ff00;
+            padding: 5px;
+            font-size: 12px;
+        }
+        
+        #playButton {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(0,200,0,0.8);
+            color: white;
+            border: 2px solid #00ff00;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #playButton:hover {
+            background: rgba(0,255,0,0.9);
+        }
+        
+        #playButton.paused {
+            background: rgba(200,100,0,0.8);
+            border-color: #ff8800;
+        }
+        
+        #restartButton {
+            position: absolute;
+            top: 60px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(200,0,0,0.8);
+            color: white;
+            border: 2px solid #ff0000;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            z-index: 100;
+            color: #00ff00;
+            font-size: 12px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="fileInput" accept=".txt" />
+    <div id="loadingStatus">Loading...</div>
+    <button id="playButton">▶ PLAY</button>
+    <button id="restartButton">↻ RESET</button>
+    <div id="controls">
+        Tap canvas or button to play/pause
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const playButton = document.getElementById('playButton');
+        const restartButton = document.getElementById('restartButton');
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        const ASSET_BASE_URL = '';
+        let backgroundImage = null;
+        let controlsImage = null;
+        let magTapeImage = null;
+        let iconImage = null;
+        
+        function loadAssets() {
+            const loadingStatus = document.getElementById('loadingStatus');
+            let loadedCount = 0;
+            
+            function checkComplete() {
+                loadedCount++;
+                loadingStatus.textContent = `Loading images... ${loadedCount}/4`;
+                if (loadedCount === 4) {
+                    console.log('All assets loaded');
+                }
+            }
+            
+            backgroundImage = new Image();
+            backgroundImage.onload = checkComplete;
+            backgroundImage.onerror = checkComplete;
+            backgroundImage.src = 'background.jpg';
+            
+            controlsImage = new Image();
+            controlsImage.onload = checkComplete;
+            controlsImage.onerror = checkComplete;
+            controlsImage.src = 'controls.jpg';
+            
+            magTapeImage = new Image();
+            magTapeImage.onload = checkComplete;
+            magTapeImage.onerror = checkComplete;
+            magTapeImage.src = 'magtape.jpg';
+            
+            iconImage = new Image();
+            iconImage.onload = checkComplete;
+            iconImage.onerror = checkComplete;
+            iconImage.src = 'icon.png';
+        }
+        
+        loadAssets();
+        
+        const POSITION_TITLE = 120;
+        const POSITION_TIME_SIGNATURE = 150;
+        const POSITION_SECTION = 180;
+        const POSITION_CHORDS = 210;
+        const POSITION_LYRIC_LINE = 240;
+        const BALL_HIGH_POSITION = 230;
+        const BOUNCE_DURATION = 0.625;
+        const BOUNCES_PER_LINE = 8;
+        
+        let songData = {};
+        let sections = [], chords = [], lyrics = [], beats = [];
+        let beatChordWordData = {};
+        let currentIndex = 0;
+        let bounceCount = 0;
+        let waitingForStart = true;
+        let songPaused = false;
+        let running = true;
+        let songLineNumber = 1;
+        let isDragging = false;
+        
+        let ballY = BALL_HIGH_POSITION;
+        let ballCenterX = 0;
+        const ballRadius = 25;
+        const ballTop = BALL_HIGH_POSITION;
+        let ballBottom = 0;
+        let bounceStartTime = null;
+        let gravity = 0;
+        let rising = false;
+        let falling = true;
+        
+        function initBallPhysics() {
+            ballCenterX = canvas.width / 2;
+            ballBottom = canvas.height - 100;
+            const fallTime = BOUNCE_DURATION / 2;
+            const bounceHeight = ballBottom - ballTop;
+            gravity = (2 * bounceHeight) / (fallTime ** 2);
+        }
+        
+        function cleanText(text) {
+            return text.trim();
+        }
+        
+        function getRidOfLL(cleanedLine) {
+            cleanedLine = cleanedLine.replace(/\t/g, '    ');
+            
+            if (cleanedLine.includes('LL')) {
+                const llIndex = cleanedLine.indexOf('LL');
+                cleanedLine = cleanedLine.substring(0, llIndex).trimEnd();
+                
+                if (cleanedLine.includes('ZZZ')) {
+                    const zzzIndex = cleanedLine.indexOf('ZZZ');
+                    cleanedLine = cleanedLine.substring(0, zzzIndex).trimEnd();
+                }
+            }
+            return cleanedLine;
+        }
+        
+        function findBeatPositions(beatLine) {
+            const beats = [];
+            const regex = /\d+/g;
+            let match;
+            while ((match = regex.exec(beatLine)) !== null) {
+                const beatNum = parseInt(match[0]);
+                if (beatNum >= 1 && beatNum <= 9) {
+                    beats.push([beatNum, match.index]);
+                }
+            }
+            return beats;
+        }
+        
+        function extractItemAtPosition(line, charIndex) {
+            if (charIndex >= line.length) return "";
+            
+            let start = charIndex;
+            while (start > 0 && line[start-1] !== ' ') {
+                start--;
+            }
+            
+            let end = charIndex;
+            while (end < line.length && line[end] !== ' ') {
+                end++;
+            }
+            
+            return line.substring(start, end).trim();
+        }
+        
+        function extractChordsAndWords(chordLine, lyricLine, beatPositions) {
+            const results = [];
+            for (const [beatNum, charIndex] of beatPositions) {
+                const chord = extractItemAtPosition(chordLine, charIndex);
+                const word = extractItemAtPosition(lyricLine, charIndex);
+                results.push([beatNum, chord, word]);
+            }
+            return results;
+        }
+        
+        const CHORDS = [
+            "C", "D", "E", "F", "G", "A", "B",
+            "Cm", "Dm", "Em", "Fm", "Gm", "Am", "Bm",
+            "C7", "D7", "E7", "F7", "G7", "A7", "B7",
+            "Cm7", "Dm7", "Em7", "Fm7", "Gm7", "Am7", "Bm7"
+        ];
+        
+        // Check words, not individual characters
+        function checkForChordLine(line, chords) {
+            if (!line) return false;
+            const words = line.split(/\s+/).filter(word => word.trim());
+            const thirtyPercentCount = Math.floor(0.4 * words.length);
+            let matchCount = 0;
+            
+            for (const word of words) {
+                const cleanWord = word.replace(/[\[\]]/g, '');
+                if (chords.includes(cleanWord)) {
+                    matchCount++;
+                }
+            }
+            return matchCount >= thirtyPercentCount;
+        }
+        
+        function categorizeLine(line) {
+            const cleanedLine = cleanText(line);
+            
+            if (cleanedLine.includes('[') && cleanedLine.includes(']')) {
+                return "sections";
+            }
+            
+            if (checkForChordLine(cleanedLine, CHORDS)) {
+                return "chords";
+            }
+            
+            const pattern = /[a-zA-Z\s]+/;
+            if (pattern.test(cleanedLine)) {
+                if (!cleanedLine.includes('ZZZ')) {
+                    return "lyrics";
+                } else if (cleanedLine.includes('ZZZ')) {
+                    return "beats";
+                }
+            }
+            
+            return "unknown";
+        }
+        
+        function processSongData(data) {
+            const lines = data.split('\n').filter(line => line.trim());
+            
+            const title = lines[0] || "[No title]";
+            const timeSignature = lines[1] || "[No time signature]";
+            const remainingLines = lines.slice(2);
+            
+            sections = [];
+            chords = [];
+            lyrics = [];
+            beats = [];
+            beatChordWordData = {};
+            
+            for (let i = 0; i < remainingLines.length; i++) {
+                const line = remainingLines[i];
+                const lineType = categorizeLine(line);
+                
+                if (lineType === "sections") {
+                    sections.push(line);
+                } else if (lineType === "chords") {
+                    chords.push(line);
+                } else if (lineType === "lyrics") {
+                    lyrics.push(line);
+                } else if (lineType === "beats") {
+                    beats.push(line);
+                    
+                    const cleanedBeatLine = getRidOfLL(line);
+                    const beatPositions = findBeatPositions(cleanedBeatLine);
+                    const beatLineIndex = beats.length - 1;
+                    
+                    if (beatLineIndex < chords.length && beatLineIndex < lyrics.length) {
+                        const chordLine = getRidOfLL(chords[beatLineIndex]);
+                        const lyricLine = getRidOfLL(lyrics[beatLineIndex]);
+                        const chordWordData = extractChordsAndWords(chordLine, lyricLine, beatPositions);
+                        beatChordWordData[beatLineIndex] = chordWordData;
+                    }
+                }
+            }
+            
+            for (let i = 0; i < Math.max(lyrics.length, chords.length, beats.length, sections.length); i++) {
+                if (i < lyrics.length) lyrics[i] = getRidOfLL(lyrics[i]);
+                if (i < chords.length) chords[i] = getRidOfLL(chords[i]);
+                if (i < beats.length) beats[i] = getRidOfLL(beats[i]);
+                if (i < sections.length) sections[i] = getRidOfLL(sections[i]);
+            }
+            
+            console.log(`Loaded: ${sections.length} sections, ${chords.length} chords, ${lyrics.length} lyrics, ${beats.length} beats`);
+            
+            songData.title = title;
+            songData.timeSignature = timeSignature;
+        }
+        
+        // File input handler (fallback for local testing)
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file && file.type === 'text/plain') {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    processSongData(e.target.result);
+                    initBallPhysics();
+                    resetSong();
+                    document.getElementById('loadingStatus').style.display = 'none';
+                    document.getElementById('fileInput').style.display = 'none';
+                    console.log('Loaded file via file picker');
+                };
+                reader.readAsText(file);
+            }
+        });
+        
+        // Auto-load lyrick_beats.txt on page load
+        function loadSong() {
+            const loadingStatus = document.getElementById('loadingStatus');
+            const fileInput = document.getElementById('fileInput');
+            loadingStatus.textContent = 'Loading song...';
+            
+            fetch('dont think twice.txt')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.text();
+                })
+                .then(data => {
+                    processSongData(data);
+                    initBallPhysics();
+                    resetSong();
+                    loadingStatus.style.display = 'none';
+                    console.log('Auto-loaded dont think twice.txt');
+                })
+                .catch(error => {
+                    console.error('Could not auto-load dont think twice.txt:', error);
+                    loadingStatus.textContent = 'Auto-load failed. Please select file:';
+                    loadingStatus.style.color = '#ffaa00';
+                    fileInput.style.display = 'block'; // Show Browse button as fallback
+                });
+        }
+        
+        // Start loading when assets are ready
+        window.addEventListener('load', loadSong);
+        
+        function interpolateColor(color1, color2, factor) {
+            const r = Math.floor(color1[0] + (color2[0] - color1[0]) * factor);
+            const g = Math.floor(color1[1] + (color2[1] - color1[1]) * factor);
+            const b = Math.floor(color1[2] + (color2[2] - color1[2]) * factor);
+            return [r, g, b];
+        }
+        
+        function colorToString(color) {
+            return `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+        }
+        
+        function resetSong() {
+            currentIndex = 0;
+            bounceCount = 0;
+            ballY = BALL_HIGH_POSITION;
+            bounceStartTime = null;
+            songPaused = false;
+            songLineNumber = 1;
+            rising = false;
+            falling = true;
+            updatePlayButton();
+        }
+        
+        function updatePlayButton() {
+            if (waitingForStart) {
+                playButton.textContent = currentIndex === 0 ? "▶ PLAY" : "↻ RESTART";
+                playButton.className = '';
+            } else if (songPaused) {
+                playButton.textContent = "▶ PLAY";
+                playButton.className = 'paused';
+            } else {
+                playButton.textContent = "⏸ PAUSE";
+                playButton.className = '';
+            }
+        }
+        
+        function togglePlayback() {
+            if (waitingForStart) {
+                if (currentIndex > 0) {
+                    resetSong();
+                }
+                waitingForStart = false;
+                bounceStartTime = performance.now() / 1000;
+            } else if (songPaused) {
+                const pauseDuration = (performance.now() / 1000) - pauseTime;
+                bounceStartTime += pauseDuration;
+                songPaused = false;
+            } else {
+                songPaused = true;
+                pauseTime = performance.now() / 1000;
+            }
+            updatePlayButton();
+        }
+        
+        let pauseTime = 0;
+        
+        // Keyboard controls (focus-aware)
+        document.addEventListener('keydown', function(e) {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePlayback();
+            } else if (e.code === 'KeyR') {
+                e.preventDefault();
+                resetSong();
+                waitingForStart = true;
+                updatePlayButton();
+            } else if (e.code === 'Escape' || e.code === 'KeyQ') {
+                e.preventDefault();
+                resetSong();
+                waitingForStart = true;
+                updatePlayButton();
+            }
+        });
+        
+        // Canvas click/touch controls
+        canvas.addEventListener('click', function(e) {
+            e.preventDefault();
+            togglePlayback();
+        });
+        
+        // Touch version for mobile devices
+        canvas.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            togglePlayback();
+        });
+        
+        // Play button controls
+        playButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            togglePlayback();
+        });
+        
+        playButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            togglePlayback();
+        });
+        
+        // Restart button controls  
+        restartButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            resetSong();
+            waitingForStart = true;
+            updatePlayButton();
+        });
+        
+        restartButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            resetSong();
+            waitingForStart = true;
+            updatePlayButton();
+        });
+        
+        // Progress indicator drag functionality
+        let progressIndicatorRect = null;
+        
+        function getProgressIndicatorRect() {
+            if (magTapeImage && magTapeImage.complete) {
+                const tapeHeight = canvas.height / 8;
+                return {
+                    x: 0,
+                    y: 0,
+                    width: canvas.width,
+                    height: tapeHeight
+                };
+            }
+            return null;
+        }
+        
+        function isInProgressIndicator(x, y) {
+            const rect = getProgressIndicatorRect();
+            return rect && x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+        }
+        
+        function handleProgressDrag(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+            
+            if (lyrics.length > 0) {
+                const progress = Math.max(0, Math.min(1, x / canvas.width));
+                const newIndex = Math.floor(progress * lyrics.length);
+                currentIndex = Math.min(newIndex, lyrics.length - 1);
+                songLineNumber = currentIndex + 1;
+                bounceCount = 0;
+                ballY = BALL_HIGH_POSITION;
+                bounceStartTime = performance.now() / 1000;
+            }
+        }
+        
+        // Mouse drag events
+        canvas.addEventListener('mousedown', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (isInProgressIndicator(x, y)) {
+                isDragging = true;
+                handleProgressDrag(e.clientX, e.clientY);
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('mousemove', function(e) {
+            if (isDragging) {
+                handleProgressDrag(e.clientX, e.clientY);
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('mouseup', function(e) {
+            if (isDragging) {
+                isDragging = false;
+                e.preventDefault();
+            }
+        });
+        
+        // Touch drag events (MOBILE SUPPORT)
+        canvas.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                if (isInProgressIndicator(x, y)) {
+                    isDragging = true;
+                    handleProgressDrag(touch.clientX, touch.clientY);
+                    e.preventDefault();
+                }
+            }
+        });
+        
+        document.addEventListener('touchmove', function(e) {
+            if (isDragging && e.touches.length === 1) {
+                const touch = e.touches[0];
+                handleProgressDrag(touch.clientX, touch.clientY);
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('touchend', function(e) {
+            if (isDragging) {
+                isDragging = false;
+                e.preventDefault();
+            }
+        });
+        
+        // Prevent context menu on long press (mobile)
+        canvas.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        });
+        
+        function renderText(text, x, y, color, fontSize = 40) {
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            ctx.fillStyle = colorToString(color);
+            ctx.fillText(text, x, y);
+        }
+        
+        function calculatePixelPosition(text, x, charIndex, fontSize = 40) {
+            if (charIndex >= text.length) return x;
+            
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            const textBefore = text.substring(0, charIndex);
+            const width = ctx.measureText(textBefore).width;
+            return x + width;
+        }
+        
+        function renderWordAtPosition(word, x, y, color, fontSize = 40) {
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            ctx.fillStyle = colorToString(color);
+            ctx.fillText(word, x, y);
+        }
+        
+        function render() {
+            if (!running) return; // Prevent render loop from stopping unexpectedly
+            
+            const currentTime = performance.now() / 1000;
+            
+            ctx.fillStyle = '#1e1e1e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            if (backgroundImage && backgroundImage.complete && backgroundImage.naturalWidth > 0) {
+                ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+            }
+            
+            if (magTapeImage && magTapeImage.complete && magTapeImage.naturalWidth > 0) {
+                const tapeHeight = canvas.height / 8;
+                ctx.drawImage(magTapeImage, 0, 0, canvas.width, tapeHeight);
+                
+                if (!waitingForStart && lyrics.length > 0) {
+                    const indicatorWidth = 8;
+                    const positionX = (currentIndex / lyrics.length) * canvas.width;
+                    const indicatorHeight = tapeHeight / 2;
+                    const indicatorY = tapeHeight / 4;
+                    
+                    const rectX = Math.max(0, Math.min(positionX - indicatorWidth / 2, canvas.width - indicatorWidth));
+                    
+                    ctx.fillStyle = colorToString([0, 255, 0]);
+                    ctx.fillRect(rectX, indicatorY, indicatorWidth, indicatorHeight);
+                    
+                    ctx.beginPath();
+                    ctx.arc(rectX + indicatorWidth / 2, indicatorY + indicatorHeight / 2, 5, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fill();
+                }
+            }
+            
+            if (controlsImage && controlsImage.complete && controlsImage.naturalWidth > 0) {
+                const controlsHeight = canvas.height / 3 + 72;
+                const controlsWidth = (controlsImage.width * controlsHeight) / controlsImage.height;
+                const controlsY = canvas.height - controlsHeight - 20;
+                const controlsX = 20;
+                
+                ctx.drawImage(controlsImage, controlsX, controlsY, controlsWidth, controlsHeight);
+                
+                if (!waitingForStart) {
+                    ctx.font = 'bold 40px Courier New';
+                    ctx.fillStyle = colorToString([0, 255, 0]);
+                    const progressText = String(songLineNumber).padStart(3, '0');
+                    ctx.fillText(progressText, controlsX + 50, controlsY + 60);
+                }
+            }
+            
+            if (songData.title) {
+                renderText(songData.title, 50, POSITION_TITLE, [0, 255, 0]);
+            }
+            if (songData.timeSignature) {
+                renderText(songData.timeSignature, 50, POSITION_TIME_SIGNATURE, [0, 255, 0]);
+            }
+            
+            if (waitingForStart) {
+                const message = currentIndex === 0 ? "Tap to bounce" : "Tap to restart";
+                renderText(message, canvas.width - 300, canvas.height - 100, [255, 255, 255]);
+            }
+            
+            if (lyrics.length > 0 && chords.length > 0 && ((!waitingForStart) || (waitingForStart && currentIndex > 0))) {
+                const chordText = chords[currentIndex % chords.length].replace(/\[|\]/g, '');
+                const lyricText = lyrics[currentIndex % lyrics.length];
+                
+                let highlightingActive = false;
+                const shouldHighlightBall = currentIndex in beatChordWordData && rising;
+                
+                if (shouldHighlightBall) {
+                    const currentBeatData = beatChordWordData[currentIndex];
+                    const currentBeatNumber = bounceCount + 1;
+                    
+                    for (const [beatNum, chord, word] of currentBeatData) {
+                        if (beatNum === currentBeatNumber) {
+                            highlightingActive = true;
+                            
+                            const dt = currentTime - bounceStartTime;
+                            const beatProgress = (dt % BOUNCE_DURATION) / BOUNCE_DURATION;
+                            const beatFactor = rising ? beatProgress : (1.0 - beatProgress);
+                            
+                            renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+                            renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
+                            
+                            const beatPositions = findBeatPositions(getRidOfLL(beats[currentIndex]));
+                            
+                            for (const [bNum, charIndex] of beatPositions) {
+                                if (bNum === beatNum) {
+                                    if (word) {
+                                        const pixelX = calculatePixelPosition(lyricText, 50, charIndex);
+                                        const highlightColor = interpolateColor([255, 255, 255], [0, 255, 255], beatFactor);
+                                        
+                                        ctx.fillStyle = '#1e1e1e';
+                                        const wordWidth = ctx.measureText(word).width;
+                                        ctx.fillRect(pixelX, POSITION_LYRIC_LINE - 35, wordWidth, 45);
+                                        
+                                        renderWordAtPosition(word, pixelX, POSITION_LYRIC_LINE, highlightColor);
+                                    }
+                                    
+                                    if (chord) {
+                                        const pixelX = calculatePixelPosition(chordText, 50, charIndex);
+                                        const highlightColor = interpolateColor([255, 165, 0], [255, 255, 0], beatFactor);
+                                        
+                                        ctx.fillStyle = '#1e1e1e';
+                                        const chordWidth = ctx.measureText(chord).width;
+                                        ctx.fillRect(pixelX, POSITION_CHORDS - 35, chordWidth, 45);
+                                        
+                                        renderWordAtPosition(chord, pixelX, POSITION_CHORDS, highlightColor);
+                                    }
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                
+                if (!highlightingActive) {
+                    renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+                    renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
+                }
+                
+                if (sections.length > 0) {
+                    renderText(sections[currentIndex % sections.length], 50, POSITION_SECTION, [0, 0, 255]);
+                }
+            }
+            
+            if (!songPaused && !waitingForStart && bounceStartTime !== null) {
+                const dt = currentTime - bounceStartTime;
+                
+                if (dt <= BOUNCE_DURATION) {
+                    const fallTime = BOUNCE_DURATION / 2;
+                    
+                    if (dt <= fallTime) {
+                        falling = true;
+                        rising = false;
+                        ballY = ballTop + 0.5 * gravity * (dt ** 2);
+                        if (ballY >= ballBottom) ballY = ballBottom;
+                    } else {
+                        const riseTime = dt - fallTime;
+                        falling = false;
+                        rising = true;
+                        const remainingRiseTime = fallTime - riseTime;
+                        ballY = ballTop + 0.5 * gravity * (remainingRiseTime ** 2);
+                        if (ballY < ballTop) ballY = ballTop;
+                    }
+                } else {
+                    bounceStartTime = currentTime;
+                    ballY = ballTop;
+                    bounceCount++;
+                    
+                    if (bounceCount >= BOUNCES_PER_LINE) {
+                        bounceCount = 0;
+                        if (lyrics.length > 0) {
+                            if (currentIndex < lyrics.length - 1) {
+                                currentIndex++;
+                                songLineNumber++;
+                            } else {
+                                waitingForStart = true;
+                                updatePlayButton();
+                            }
+                        }
+                    }
+                }
+            } else if (waitingForStart) {
+                ballY = BALL_HIGH_POSITION;
+            }
+            
+            const shouldHighlightBall = currentIndex in beatChordWordData && rising && 
+                beatChordWordData[currentIndex].some(([beatNum]) => beatNum === bounceCount + 1);
+            
+            ctx.beginPath();
+            ctx.arc(ballCenterX, ballY, ballRadius, 0, 2 * Math.PI);
+            ctx.fillStyle = shouldHighlightBall ? '#00ff00' : '#ee7621';
+            ctx.fill();
+            
+            requestAnimationFrame(render);
+        }
+        
+        // Initialize and start
+        initBallPhysics();
+        updatePlayButton();
+        render();
+        
+        // Focus handling for better keyboard support
+        window.addEventListener('focus', function() {
+            canvas.focus();
+        });
+        
+        // Make canvas focusable
+        canvas.setAttribute('tabindex', '0');
+        canvas.focus();
+    </script>
+</body>
+</html>
