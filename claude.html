@@ -15,11 +15,15 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             color: white;
             font-family: 'Courier New', monospace;
             overflow: hidden;
+            user-select: none; /* Prevent text selection on mobile */
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
         }
         
         #gameCanvas {
             display: block;
             background: #1e1e1e;
+            cursor: pointer;
         }
         
         #fileInput {
@@ -31,6 +35,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             color: white;
             border: 1px solid #555;
             padding: 5px;
+            display: none; /* Hidden by default */
         }
         
         #loadingStatus {
@@ -43,16 +48,100 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             padding: 5px;
             font-size: 12px;
         }
+        
+        #playButton {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(0,200,0,0.8);
+            color: white;
+            border: 2px solid #00ff00;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #playButton:hover {
+            background: rgba(0,255,0,0.9);
+        }
+        
+        #playButton.paused {
+            background: rgba(200,100,0,0.8);
+            border-color: #ff8800;
+        }
+        
+        #restartButton {
+            position: absolute;
+            top: 60px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(200,0,0,0.8);
+            color: white;
+            border: 2px solid #ff0000;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #birthdayButton {
+            position: absolute;
+            top: 110px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(255,20,147,0.8);
+            color: white;
+            border: 2px solid #ff1493;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            display: none; /* Hidden by default */
+        }
+        
+        #birthdayButton:hover {
+            background: rgba(255,20,147,1.0);
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            z-index: 100;
+            color: #00ff00;
+            font-size: 12px;
+            text-align: right;
+        }
     </style>
 </head>
 <body>
     <input type="file" id="fileInput" accept=".txt" />
-    <div id="loadingStatus">Loading images...</div>
+    <div id="loadingStatus">Loading...</div>
+    <button id="playButton">▶ PLAY</button>
+    <button id="restartButton">↻ RESET</button>
+    <button id="birthdayButton">🎂 BIRTHDAY</button>
+    <div id="controls">
+        Tap canvas or button to play/pause<br>
+        🎂 Birthday Magic:<br>
+        Desktop: D, B, or spell DELPHINE!<br>
+        iPad: Triple-tap or birthday button! 🎉
+    </div>
     <canvas id="gameCanvas"></canvas>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const playButton = document.getElementById('playButton');
+        const restartButton = document.getElementById('restartButton');
+        const birthdayButton = document.getElementById('birthdayButton');
         
         function resizeCanvas() {
             canvas.width = window.innerWidth;
@@ -61,7 +150,6 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
         
-        // FIXED: Load from GitHub, not sullivanweb.me
         const ASSET_BASE_URL = '';
         let backgroundImage = null;
         let controlsImage = null;
@@ -76,7 +164,6 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
                 loadedCount++;
                 loadingStatus.textContent = `Loading images... ${loadedCount}/4`;
                 if (loadedCount === 4) {
-                    loadingStatus.style.display = 'none';
                     console.log('All assets loaded');
                 }
             }
@@ -122,6 +209,23 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
         let songPaused = false;
         let running = true;
         let songLineNumber = 1;
+        let isDragging = false;
+        
+        // Birthday Easter Egg Variables! 🎂
+        let birthdayMode = false;
+        let birthdayKeySequence = [];
+        let birthdayTargetSequence = ['KeyD', 'KeyE', 'KeyL', 'KeyP', 'KeyH', 'KeyI', 'KeyN', 'KeyE'];
+        let birthdayParticles = [];
+        let birthdayStartTime = 0;
+        let birthdayColors = [
+            [255, 20, 147],  // Deep pink
+            [255, 165, 0],   // Orange  
+            [255, 255, 0],   // Yellow
+            [50, 205, 50],   // Lime green
+            [0, 191, 255],   // Deep sky blue
+            [138, 43, 226],  // Blue violet
+            [255, 20, 147]   // Deep pink
+        ];
         
         let ballY = BALL_HIGH_POSITION;
         let ballCenterX = 0;
@@ -189,6 +293,114 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             return line.substring(start, end).trim();
         }
         
+        // Birthday Particle System! ✨
+        class BirthdayParticle {
+            constructor(x, y, type = 'sparkle') {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 8;
+                this.vy = (Math.random() - 0.5) * 8;
+                this.life = 1.0;
+                this.decay = 0.015 + Math.random() * 0.01;
+                this.size = 3 + Math.random() * 4;
+                this.color = birthdayColors[Math.floor(Math.random() * birthdayColors.length)];
+                this.type = type;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.2;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.1; // gravity
+                this.life -= this.decay;
+                this.rotation += this.rotationSpeed;
+                this.vx *= 0.99; // air resistance
+            }
+            
+            render(ctx) {
+                if (this.life <= 0) return;
+                
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                
+                if (this.type === 'confetti') {
+                    ctx.fillStyle = colorToString(this.color);
+                    ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
+                } else {
+                    // Sparkle
+                    ctx.strokeStyle = colorToString(this.color);
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(-this.size, 0);
+                    ctx.lineTo(this.size, 0);
+                    ctx.moveTo(0, -this.size);
+                    ctx.lineTo(0, this.size);
+                    ctx.stroke();
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        function createBirthdayParticles(x, y, count = 20, type = 'sparkle') {
+            for (let i = 0; i < count; i++) {
+                birthdayParticles.push(new BirthdayParticle(x, y, type));
+            }
+        }
+        
+        function updateBirthdayParticles() {
+            for (let i = birthdayParticles.length - 1; i >= 0; i--) {
+                birthdayParticles[i].update();
+                if (birthdayParticles[i].life <= 0) {
+                    birthdayParticles.splice(i, 1);
+                }
+            }
+        }
+        
+        function renderBirthdayParticles(ctx) {
+            birthdayParticles.forEach(particle => particle.render(ctx));
+        }
+        
+        function triggerBirthdayMode() {
+            birthdayMode = true;
+            birthdayStartTime = performance.now();
+            
+            // Create confetti explosion!
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    createBirthdayParticles(
+                        Math.random() * canvas.width, 
+                        Math.random() * canvas.height * 0.3, 
+                        15, 
+                        'confetti'
+                    );
+                    createBirthdayParticles(
+                        Math.random() * canvas.width, 
+                        Math.random() * canvas.height * 0.3, 
+                        10, 
+                        'sparkle'
+                    );
+                }, i * 300);
+            }
+            
+            console.log('🎂 HAPPY BIRTHDAY DELPHINE! 🎉');
+            
+            // Auto-turn off after 30 seconds
+            setTimeout(() => {
+                birthdayMode = false;
+                birthdayParticles = [];
+            }, 30000);
+        }
+        
+        function getBirthdayBallColor() {
+            const time = (performance.now() - birthdayStartTime) / 1000;
+            const colorIndex = Math.floor(time * 3) % birthdayColors.length;
+            return birthdayColors[colorIndex];
+        }
+        
         function extractChordsAndWords(chordLine, lyricLine, beatPositions) {
             const results = [];
             for (const [beatNum, charIndex] of beatPositions) {
@@ -206,7 +418,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             "Cm7", "Dm7", "Em7", "Fm7", "Gm7", "Am7", "Bm7"
         ];
         
-        // FIXED: Check words, not individual characters
+        // Check words, not individual characters
         function checkForChordLine(line, chords) {
             if (!line) return false;
             const words = line.split(/\s+/).filter(word => word.trim());
@@ -297,6 +509,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             songData.timeSignature = timeSignature;
         }
         
+        // File input handler (fallback for local testing)
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file && file.type === 'text/plain') {
@@ -305,10 +518,44 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
                     processSongData(e.target.result);
                     initBallPhysics();
                     resetSong();
+                    document.getElementById('loadingStatus').style.display = 'none';
+                    document.getElementById('fileInput').style.display = 'none';
+                    console.log('Loaded file via file picker');
                 };
                 reader.readAsText(file);
             }
         });
+        
+        // Auto-load lyrick_beats.txt on page load
+        function loadSong() {
+            const loadingStatus = document.getElementById('loadingStatus');
+            const fileInput = document.getElementById('fileInput');
+            loadingStatus.textContent = 'Loading song...';
+            
+            fetch('lyrick_beats.txt')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.text();
+                })
+                .then(data => {
+                    processSongData(data);
+                    initBallPhysics();
+                    resetSong();
+                    loadingStatus.style.display = 'none';
+                    console.log('Auto-loaded lyrick_beats.txt');
+                })
+                .catch(error => {
+                    console.error('Could not auto-load lyrick_beats.txt:', error);
+                    loadingStatus.textContent = 'Auto-load failed. Please select file:';
+                    loadingStatus.style.color = '#ffaa00';
+                    fileInput.style.display = 'block'; // Show Browse button as fallback
+                });
+        }
+        
+        // Start loading when assets are ready
+        window.addEventListener('load', loadSong);
         
         function interpolateColor(color1, color2, factor) {
             const r = Math.floor(color1[0] + (color2[0] - color1[0]) * factor);
@@ -330,29 +577,352 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             songLineNumber = 1;
             rising = false;
             falling = true;
+            updatePlayButton();
+        }
+        
+        function updatePlayButton() {
+            if (waitingForStart) {
+                playButton.textContent = currentIndex === 0 ? "▶ PLAY" : "↻ RESTART";
+                playButton.className = '';
+            } else if (songPaused) {
+                playButton.textContent = "▶ PLAY";
+                playButton.className = 'paused';
+            } else {
+                playButton.textContent = "⏸ PAUSE";
+                playButton.className = '';
+            }
+        }
+        
+        function togglePlayback() {
+            if (waitingForStart) {
+                if (currentIndex > 0) {
+                    resetSong();
+                }
+                waitingForStart = false;
+                bounceStartTime = performance.now() / 1000;
+            } else if (songPaused) {
+                const pauseDuration = (performance.now() / 1000) - pauseTime;
+                bounceStartTime += pauseDuration;
+                songPaused = false;
+            } else {
+                songPaused = true;
+                pauseTime = performance.now() / 1000;
+            }
+            updatePlayButton();
+            showBirthdayButton(); // Show birthday button after first interaction
         }
         
         let pauseTime = 0;
+        
+        // Keyboard controls (focus-aware)
         document.addEventListener('keydown', function(e) {
             if (e.code === 'Space') {
                 e.preventDefault();
-                if (waitingForStart) {
-                    if (currentIndex > 0) {
-                        resetSong();
-                    }
-                    waitingForStart = false;
-                    bounceStartTime = performance.now() / 1000;
-                } else if (songPaused) {
-                    const pauseDuration = (performance.now() / 1000) - pauseTime;
-                    bounceStartTime += pauseDuration;
-                    songPaused = false;
-                } else {
-                    songPaused = true;
-                    pauseTime = performance.now() / 1000;
-                }
+                togglePlayback();
+            } else if (e.code === 'KeyR') {
+                e.preventDefault();
+                resetSong();
+                waitingForStart = true;
+                updatePlayButton();
             } else if (e.code === 'Escape' || e.code === 'KeyQ') {
-                running = false;
+                e.preventDefault();
+                resetSong();
+                waitingForStart = true;
+                updatePlayButton();
+            } else if (e.code === 'KeyD') {
+                // 🎂 Press D for Delphine!
+                e.preventDefault();
+                triggerBirthdayMode();
+                createBirthdayParticles(ballCenterX, ballY, 30, 'sparkle');
+            } else if (e.code === 'KeyB') {
+                // 🎉 Press B for Birthday!
+                e.preventDefault();
+                triggerBirthdayMode();
+                // Confetti from top of screen
+                for (let i = 0; i < 50; i++) {
+                    createBirthdayParticles(
+                        Math.random() * canvas.width, 
+                        -10, 
+                        1, 
+                        'confetti'
+                    );
+                }
             }
+            
+            // 🎵 Secret DELPHINE sequence!
+            if (birthdayTargetSequence.includes(e.code)) {
+                birthdayKeySequence.push(e.code);
+                
+                // Keep only recent keys (last 8)
+                if (birthdayKeySequence.length > 8) {
+                    birthdayKeySequence.shift();
+                }
+                
+                // Check if we have the right sequence
+                if (birthdayKeySequence.length === 8) {
+                    let matches = true;
+                    for (let i = 0; i < 8; i++) {
+                        if (birthdayKeySequence[i] !== birthdayTargetSequence[i]) {
+                            matches = false;
+                            break;
+                        }
+                    }
+                    
+                    if (matches) {
+                        // 🎂 BIG BIRTHDAY SURPRISE!
+                        triggerBirthdayMode();
+                        // Massive confetti explosion!
+                        for (let i = 0; i < 100; i++) {
+                            setTimeout(() => {
+                                createBirthdayParticles(
+                                    Math.random() * canvas.width, 
+                                    Math.random() * canvas.height * 0.2, 
+                                    5, 
+                                    Math.random() > 0.5 ? 'confetti' : 'sparkle'
+                                );
+                            }, i * 50);
+                        }
+                        birthdayKeySequence = []; // Reset
+                    }
+                }
+            } else {
+                // Reset sequence if wrong key
+                birthdayKeySequence = [];
+            }
+        });
+        
+        // Canvas click/touch controls with birthday magic! 🎂
+        let tapCount = 0;
+        let tapTimer = null;
+        
+        canvas.addEventListener('click', function(e) {
+            e.preventDefault();
+            tapCount++;
+            
+            if (tapTimer) clearTimeout(tapTimer);
+            
+            tapTimer = setTimeout(() => {
+                if (tapCount === 3) {
+                    // 🎉 Triple-tap birthday surprise!
+                    triggerBirthdayMode();
+                    // Big confetti explosion for iPad users!
+                    for (let i = 0; i < 80; i++) {
+                        setTimeout(() => {
+                            createBirthdayParticles(
+                                Math.random() * canvas.width, 
+                                Math.random() * canvas.height * 0.3, 
+                                3, 
+                                Math.random() > 0.5 ? 'confetti' : 'sparkle'
+                            );
+                        }, i * 40);
+                    }
+                } else if (tapCount === 1) {
+                    // Normal single tap
+                    togglePlayback();
+                }
+                tapCount = 0;
+            }, 600); // 600ms window for triple-tap
+        });
+        
+        // Touch version for mobile devices
+        let touchTapCount = 0;
+        let touchTapTimer = null;
+        
+        canvas.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            touchTapCount++;
+            
+            if (touchTapTimer) clearTimeout(touchTapTimer);
+            
+            touchTapTimer = setTimeout(() => {
+                if (touchTapCount === 3) {
+                    // 🎉 Triple-touch birthday surprise!
+                    triggerBirthdayMode();
+                    // Big confetti explosion for touch users!
+                    for (let i = 0; i < 80; i++) {
+                        setTimeout(() => {
+                            createBirthdayParticles(
+                                Math.random() * canvas.width, 
+                                Math.random() * canvas.height * 0.3, 
+                                3, 
+                                Math.random() > 0.5 ? 'confetti' : 'sparkle'
+                            );
+                        }, i * 40);
+                    }
+                } else if (touchTapCount === 1) {
+                    // Normal single touch
+                    togglePlayback();
+                }
+                touchTapCount = 0;
+            }, 600); // 600ms window for triple-tap
+        });
+        
+        // Play button controls
+        playButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            togglePlayback();
+        });
+        
+        playButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            togglePlayback();
+        });
+        
+        // Restart button controls  
+        restartButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            resetSong();
+            waitingForStart = true;
+            updatePlayButton();
+        });
+        
+        restartButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            resetSong();
+            waitingForStart = true;
+            updatePlayButton();
+        });
+        
+        // 🎂 Birthday button controls!
+        birthdayButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            triggerBirthdayMode();
+            // Big birthday explosion for button press!
+            for (let i = 0; i < 100; i++) {
+                setTimeout(() => {
+                    createBirthdayParticles(
+                        Math.random() * canvas.width, 
+                        Math.random() * canvas.height * 0.3, 
+                        3, 
+                        Math.random() > 0.5 ? 'confetti' : 'sparkle'
+                    );
+                }, i * 30);
+            }
+        });
+        
+        birthdayButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            triggerBirthdayMode();
+            // Big birthday explosion for button press!
+            for (let i = 0; i < 100; i++) {
+                setTimeout(() => {
+                    createBirthdayParticles(
+                        Math.random() * canvas.width, 
+                        Math.random() * canvas.height * 0.3, 
+                        3, 
+                        Math.random() > 0.5 ? 'confetti' : 'sparkle'
+                    );
+                }, i * 30);
+            }
+        });
+        
+        // Show birthday button after first interaction (for mobile users)
+        let hasInteracted = false;
+        function showBirthdayButton() {
+            if (!hasInteracted) {
+                birthdayButton.style.display = 'block';
+                hasInteracted = true;
+            }
+        }
+        
+        // Progress indicator drag functionality
+        let progressIndicatorRect = null;
+        
+        function getProgressIndicatorRect() {
+            if (magTapeImage && magTapeImage.complete) {
+                const tapeHeight = canvas.height / 8;
+                return {
+                    x: 0,
+                    y: 0,
+                    width: canvas.width,
+                    height: tapeHeight
+                };
+            }
+            return null;
+        }
+        
+        function isInProgressIndicator(x, y) {
+            const rect = getProgressIndicatorRect();
+            return rect && x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+        }
+        
+        function handleProgressDrag(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+            
+            if (lyrics.length > 0) {
+                const progress = Math.max(0, Math.min(1, x / canvas.width));
+                const newIndex = Math.floor(progress * lyrics.length);
+                currentIndex = Math.min(newIndex, lyrics.length - 1);
+                songLineNumber = currentIndex + 1;
+                bounceCount = 0;
+                ballY = BALL_HIGH_POSITION;
+                bounceStartTime = performance.now() / 1000;
+            }
+        }
+        
+        // Mouse drag events
+        canvas.addEventListener('mousedown', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (isInProgressIndicator(x, y)) {
+                isDragging = true;
+                handleProgressDrag(e.clientX, e.clientY);
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('mousemove', function(e) {
+            if (isDragging) {
+                handleProgressDrag(e.clientX, e.clientY);
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('mouseup', function(e) {
+            if (isDragging) {
+                isDragging = false;
+                e.preventDefault();
+            }
+        });
+        
+        // Touch drag events (MOBILE SUPPORT)
+        canvas.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                if (isInProgressIndicator(x, y)) {
+                    isDragging = true;
+                    handleProgressDrag(touch.clientX, touch.clientY);
+                    e.preventDefault();
+                }
+            }
+        });
+        
+        document.addEventListener('touchmove', function(e) {
+            if (isDragging && e.touches.length === 1) {
+                const touch = e.touches[0];
+                handleProgressDrag(touch.clientX, touch.clientY);
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('touchend', function(e) {
+            if (isDragging) {
+                isDragging = false;
+                e.preventDefault();
+            }
+        });
+        
+        // Prevent context menu on long press (mobile)
+        canvas.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
         });
         
         function renderText(text, x, y, color, fontSize = 40) {
@@ -377,16 +947,28 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
         }
         
         function render() {
+            if (!running) return; // Prevent render loop from stopping unexpectedly
+            
             const currentTime = performance.now() / 1000;
             
             ctx.fillStyle = '#1e1e1e';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            if (backgroundImage && backgroundImage.complete) {
+            if (backgroundImage && backgroundImage.complete && backgroundImage.naturalWidth > 0) {
                 ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
             }
             
-            if (magTapeImage && magTapeImage.complete) {
+            // 🎂 Birthday background effect!
+            if (birthdayMode) {
+                const time = currentTime - birthdayStartTime / 1000;
+                ctx.save();
+                ctx.globalAlpha = 0.1 + Math.sin(time * 4) * 0.05;
+                ctx.fillStyle = colorToString(birthdayColors[Math.floor(time) % birthdayColors.length]);
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            }
+            
+            if (magTapeImage && magTapeImage.complete && magTapeImage.naturalWidth > 0) {
                 const tapeHeight = canvas.height / 8;
                 ctx.drawImage(magTapeImage, 0, 0, canvas.width, tapeHeight);
                 
@@ -398,7 +980,9 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
                     
                     const rectX = Math.max(0, Math.min(positionX - indicatorWidth / 2, canvas.width - indicatorWidth));
                     
-                    ctx.fillStyle = '#00ff00';
+                    // 🎨 Birthday progress indicator!
+                    const indicatorColor = birthdayMode ? getBirthdayBallColor() : [0, 255, 0];
+                    ctx.fillStyle = colorToString(indicatorColor);
                     ctx.fillRect(rectX, indicatorY, indicatorWidth, indicatorHeight);
                     
                     ctx.beginPath();
@@ -408,7 +992,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
                 }
             }
             
-            if (controlsImage && controlsImage.complete) {
+            if (controlsImage && controlsImage.complete && controlsImage.naturalWidth > 0) {
                 const controlsHeight = canvas.height / 3 + 72;
                 const controlsWidth = (controlsImage.width * controlsHeight) / controlsImage.height;
                 const controlsY = canvas.height - controlsHeight - 20;
@@ -418,22 +1002,65 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
                 
                 if (!waitingForStart) {
                     ctx.font = 'bold 40px Courier New';
-                    ctx.fillStyle = '#00ff00';
+                    // 🎨 Birthday line numbers!
+                    const numberColor = birthdayMode ? getBirthdayBallColor() : [0, 255, 0];
+                    ctx.fillStyle = colorToString(numberColor);
                     const progressText = String(songLineNumber).padStart(3, '0');
                     ctx.fillText(progressText, controlsX + 50, controlsY + 60);
                 }
             }
             
             if (songData.title) {
-                renderText(songData.title, 50, POSITION_TITLE, [0, 255, 0]);
+                const titleColor = birthdayMode ? getBirthdayBallColor() : [0, 255, 0];
+                renderText(songData.title, 50, POSITION_TITLE, titleColor);
             }
             if (songData.timeSignature) {
-                renderText(songData.timeSignature, 50, POSITION_TIME_SIGNATURE, [0, 255, 0]);
+                const timeColor = birthdayMode ? getBirthdayBallColor() : [0, 255, 0];
+                renderText(songData.timeSignature, 50, POSITION_TIME_SIGNATURE, timeColor);
+            }
+            
+            // 🎂 Birthday Messages!
+            if (birthdayMode) {
+                const time = currentTime - birthdayStartTime / 1000;
+                ctx.save();
+                ctx.globalAlpha = 0.8 + Math.sin(time * 6) * 0.2;
+                
+                const messages = [
+                    "🎂 HAPPY BIRTHDAY DELPHINE! 🎉",
+                    "✨ Hope your day is magical! ✨", 
+                    "🎵 Dance to the music! 🎵",
+                    "🌟 You're a STAR! 🌟"
+                ];
+                
+                const messageIndex = Math.floor(time / 3) % messages.length;
+                const messageColor = getBirthdayBallColor();
+                
+                ctx.font = 'bold 32px Courier New';
+                ctx.fillStyle = colorToString(messageColor);
+                ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                ctx.shadowBlur = 4;
+                ctx.shadowOffsetX = 2;
+                ctx.shadowOffsetY = 2;
+                
+                const message = messages[messageIndex];
+                const messageWidth = ctx.measureText(message).width;
+                const messageX = (canvas.width - messageWidth) / 2;
+                ctx.fillText(message, messageX, 350);
+                
+                ctx.restore();
             }
             
             if (waitingForStart) {
-                const message = currentIndex === 0 ? "Spacebar to bounce" : "Press spacebar to restart";
-                renderText(message, canvas.width - 400, canvas.height - 100, [255, 255, 255]);
+                const message = currentIndex === 0 ? "Tap to bounce" : "Tap to restart";
+                const messageColor = birthdayMode ? getBirthdayBallColor() : [255, 255, 255];
+                renderText(message, canvas.width - 300, canvas.height - 100, messageColor);
+                
+                // 🎁 Birthday instructions!
+                if (birthdayMode) {
+                    ctx.font = 'bold 16px Courier New';
+                    ctx.fillStyle = colorToString(getBirthdayBallColor());
+                    ctx.fillText("Press D, B, or spell DELPHINE for more birthday magic!", 50, canvas.height - 50);
+                }
             }
             
             if (lyrics.length > 0 && chords.length > 0 && ((!waitingForStart) || (waitingForStart && currentIndex > 0))) {
@@ -455,7 +1082,9 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
                             const beatProgress = (dt % BOUNCE_DURATION) / BOUNCE_DURATION;
                             const beatFactor = rising ? beatProgress : (1.0 - beatProgress);
                             
-                            renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+                            // 🎨 Birthday chord colors!
+                            const chordBaseColor = birthdayMode ? getBirthdayBallColor() : [255, 165, 0];
+                            renderText(chordText, 50, POSITION_CHORDS, chordBaseColor);
                             renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
                             
                             const beatPositions = findBeatPositions(getRidOfLL(beats[currentIndex]));
@@ -464,18 +1093,26 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
                                 if (bNum === beatNum) {
                                     if (word) {
                                         const pixelX = calculatePixelPosition(lyricText, 50, charIndex);
-                                        const highlightColor = interpolateColor([255, 255, 255], [0, 255, 255], beatFactor);
+                                        const highlightColor = birthdayMode ? 
+                                            interpolateColor(getBirthdayBallColor(), [255, 255, 255], beatFactor) :
+                                            interpolateColor([255, 255, 255], [0, 255, 255], beatFactor);
                                         
                                         ctx.fillStyle = '#1e1e1e';
                                         const wordWidth = ctx.measureText(word).width;
                                         ctx.fillRect(pixelX, POSITION_LYRIC_LINE - 35, wordWidth, 45);
                                         
                                         renderWordAtPosition(word, pixelX, POSITION_LYRIC_LINE, highlightColor);
+                                        
+                                        // ✨ Birthday sparkles on words!
+                                        if (birthdayMode && Math.random() > 0.8) {
+                                            createBirthdayParticles(pixelX + wordWidth/2, POSITION_LYRIC_LINE, 1, 'sparkle');
+                                        }
                                     }
                                     
                                     if (chord) {
                                         const pixelX = calculatePixelPosition(chordText, 50, charIndex);
-                                        const highlightColor = interpolateColor([255, 165, 0], [255, 255, 0], beatFactor);
+                                        const chordHighlightBase = birthdayMode ? getBirthdayBallColor() : [255, 165, 0];
+                                        const highlightColor = interpolateColor(chordHighlightBase, [255, 255, 0], beatFactor);
                                         
                                         ctx.fillStyle = '#1e1e1e';
                                         const chordWidth = ctx.measureText(chord).width;
@@ -492,12 +1129,14 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
                 }
                 
                 if (!highlightingActive) {
-                    renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+                    const chordColor = birthdayMode ? getBirthdayBallColor() : [255, 165, 0];
+                    renderText(chordText, 50, POSITION_CHORDS, chordColor);
                     renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
                 }
                 
                 if (sections.length > 0) {
-                    renderText(sections[currentIndex % sections.length], 50, POSITION_SECTION, [0, 0, 255]);
+                    const sectionColor = birthdayMode ? getBirthdayBallColor() : [0, 0, 255];
+                    renderText(sections[currentIndex % sections.length], 50, POSITION_SECTION, sectionColor);
                 }
             }
             
@@ -525,6 +1164,11 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
                     ballY = ballTop;
                     bounceCount++;
                     
+                    // ✨ Birthday sparkles on bounce!
+                    if (birthdayMode) {
+                        createBirthdayParticles(ballCenterX, ballBottom, 5, 'sparkle');
+                    }
+                    
                     if (bounceCount >= BOUNCES_PER_LINE) {
                         bounceCount = 0;
                         if (lyrics.length > 0) {
@@ -533,6 +1177,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
                                 songLineNumber++;
                             } else {
                                 waitingForStart = true;
+                                updatePlayButton();
                             }
                         }
                     }
@@ -546,16 +1191,42 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             
             ctx.beginPath();
             ctx.arc(ballCenterX, ballY, ballRadius, 0, 2 * Math.PI);
-            ctx.fillStyle = shouldHighlightBall ? '#00ff00' : '#ee7621';
+            
+            // 🎨 Birthday rainbow ball!
+            if (birthdayMode) {
+                const gradient = ctx.createRadialGradient(ballCenterX, ballY, 0, ballCenterX, ballY, ballRadius);
+                const ballColor = getBirthdayBallColor();
+                gradient.addColorStop(0, colorToString(ballColor));
+                gradient.addColorStop(0.7, colorToString([ballColor[0] * 0.7, ballColor[1] * 0.7, ballColor[2] * 0.7]));
+                gradient.addColorStop(1, colorToString([ballColor[0] * 0.4, ballColor[1] * 0.4, ballColor[2] * 0.4]));
+                ctx.fillStyle = gradient;
+            } else {
+                ctx.fillStyle = shouldHighlightBall ? '#00ff00' : '#ee7621';
+            }
             ctx.fill();
             
-            if (running) {
-                requestAnimationFrame(render);
+            // 🎉 Update and render birthday particles!
+            if (birthdayMode) {
+                updateBirthdayParticles();
+                renderBirthdayParticles(ctx);
             }
+            
+            requestAnimationFrame(render);
         }
         
+        // Initialize and start
         initBallPhysics();
+        updatePlayButton();
         render();
+        
+        // Focus handling for better keyboard support
+        window.addEventListener('focus', function() {
+            canvas.focus();
+        });
+        
+        // Make canvas focusable
+        canvas.setAttribute('tabindex', '0');
+        canvas.focus();
     </script>
 </body>
 </html>
