@@ -2,6 +2,10 @@ import pygame
 import time
 import re
 import pprint
+import threading
+import pyaudio
+import wave
+from datetime import datetime
 from typing import List, Dict, Tuple
 
 """
@@ -33,12 +37,258 @@ def render_text_line(text, font, x_pos, y_pos, default_color, highlight_words=No
         screen.blit(word_surface, (current_x, y_pos))
         current_x += word_surface.get_width() + font.size(' ')[0]    
 
+# Button functions to replace Button class
+def draw_button(screen, rect, text, font, is_hovered=False, is_pressed=False, color=(0, 102, 204), text_color=(255, 255, 255)):
+    """Draw a button with text"""
+    hover_color = (0, 128, 255)
+    press_color = (0, 80, 160)
+    
+    if is_pressed:
+        button_color = press_color
+    elif is_hovered:
+        button_color = hover_color
+    else:
+        button_color = color
+    
+    pygame.draw.rect(screen, button_color, rect)
+    pygame.draw.rect(screen, (255, 255, 255), rect, 2)
+    
+    text_surface = font.render(text, True, text_color)
+    text_rect = text_surface.get_rect(center=rect.center)
+    screen.blit(text_surface, text_rect)
+
+def is_button_clicked(rect, event):
+    """Check if button was clicked"""
+    if event.type == pygame.MOUSEBUTTONDOWN:
+        if event.button == 1 and rect.collidepoint(event.pos):
+            return True
+    return False
+
+def is_button_hovered(rect, mouse_pos):
+    """Check if mouse is hovering over button"""
+    return rect.collidepoint(mouse_pos)
+
+# Speed slider functions to replace SpeedSlider class
+def draw_speed_slider(screen, rect, font, values, labels, current_index, label_text="Speed"):
+    """Draw speed slider"""
+    knob_radius = 10
+    
+    # Draw slider track
+    track_rect = pygame.Rect(rect.x, rect.centery - 2, rect.width, 4)
+    pygame.draw.rect(screen, (100, 100, 100), track_rect)
+    
+    # Draw position markers
+    for i in range(len(values)):
+        marker_x = rect.x + (i / (len(values) - 1)) * rect.width
+        pygame.draw.circle(screen, (150, 150, 150), (int(marker_x), rect.centery), 3)
+    
+    # Draw knob
+    knob_x = rect.x + (current_index / (len(values) - 1)) * rect.width
+    pygame.draw.circle(screen, (255, 255, 255), (int(knob_x), rect.centery), knob_radius)
+    pygame.draw.circle(screen, (0, 102, 204), (int(knob_x), rect.centery), knob_radius - 2)
+    
+    # Draw label
+    current_label = labels[current_index]
+    label_surface = font.render(f"{label_text}: {current_label}", True, (255, 255, 255))
+    label_rect = label_surface.get_rect(center=(rect.centerx, rect.y - 15))
+    screen.blit(label_surface, label_rect)
+
+def handle_speed_slider(rect, values, current_index, event, dragging):
+    """Handle speed slider events, returns (new_index, new_dragging_state, changed)"""
+    if event.type == pygame.MOUSEBUTTONDOWN:
+        if event.button == 1 and rect.collidepoint(event.pos):
+            dragging = True
+            new_index, changed = update_slider_from_mouse(rect, values, current_index, event.pos)
+            return new_index, dragging, changed
+    elif event.type == pygame.MOUSEBUTTONUP:
+        dragging = False
+    elif event.type == pygame.MOUSEMOTION and dragging:
+        new_index, changed = update_slider_from_mouse(rect, values, current_index, event.pos)
+        return new_index, dragging, changed
+    
+    return current_index, dragging, False
+
+def update_slider_from_mouse(rect, values, current_index, pos):
+    """Update slider position from mouse, returns (new_index, changed)"""
+    relative_x = pos[0] - rect.x
+    progress = max(0, min(1, relative_x / rect.width))
+    new_index = round(progress * (len(values) - 1))
+    
+    changed = (new_index != current_index)
+    return new_index, changed
+
+# Button outline functions for controls image
+def scale_button_coordinates(original_coords, original_image_size, scaled_image_size):
+    """Scale button coordinates from original image size to scaled size"""
+    orig_width, orig_height = original_image_size
+    scaled_width, scaled_height = scaled_image_size
+    
+    scale_x = scaled_width / orig_width
+    scale_y = scaled_height / orig_height
+    
+    scaled_coords = []
+    for x, y in original_coords:
+        scaled_x = int(x * scale_x)
+        scaled_y = int(y * scale_y)
+        scaled_coords.append((scaled_x, scaled_y))
+    
+    return scaled_coords
+
+def offset_coordinates(coords, offset_x, offset_y):
+    """Offset coordinates by the given x,y amounts"""
+    return [(x + offset_x, y + offset_y) for x, y in coords]
+
+def draw_button_outline(screen, coords, color=(0, 255, 0), width=2):
+    """Draw polygon outline for button region"""
+    if len(coords) >= 3:
+        pygame.draw.polygon(screen, color, coords, width)
+
+def point_in_polygon(point, polygon):
+    """Check if point is inside polygon using ray casting algorithm"""
+    x, y = point
+    n = len(polygon)
+    inside = False
+    
+    p1x, p1y = polygon[0]
+    for i in range(1, n + 1):
+        p2x, p2y = polygon[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xinters:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+    
+    return inside
+
+def check_button_click(mouse_pos, button_coords):
+    """Check which button was clicked, returns button name or None"""
+    for button_name, coords in button_coords.items():
+        if point_in_polygon(mouse_pos, coords):
+            return button_name
+    return None
+
 # Debug flags - set to True only when needed
 DEBUG_FILE_PARSING = False
-DEBUG_BEAT_ANALYSIS = True
+DEBUG_BEAT_ANALYSIS = False
+DEBUG_SYLLABLE_EXTRACTION = False
 DEBUG_GAME_LOOP = False
 DEBUG_POSITIONS = False
 DEBUG_TIMING = False
+
+# Audio recording variables
+is_recording = False
+recording_thread = None
+audio_frames = []
+audio_stream = None
+p_audio = None
+
+# Audio recording functions
+def start_recording():
+    """Start audio recording in a separate thread"""
+    global is_recording, recording_thread, audio_frames, audio_stream, p_audio
+    
+    if is_recording:
+        return
+    
+    try:
+        # Initialize pyaudio
+        p_audio = pyaudio.PyAudio()
+        
+        # Audio settings
+        chunk = 1024
+        sample_format = pyaudio.paInt16
+        channels = 1  # Mono
+        fs = 44100  # Sample rate
+        
+        # Start recording stream
+        audio_stream = p_audio.open(format=sample_format,
+                                   channels=channels,
+                                   rate=fs,
+                                   frames_per_buffer=chunk,
+                                   input=True)
+        
+        audio_frames = []
+        is_recording = True
+        
+        # Start recording thread
+        recording_thread = threading.Thread(target=record_audio_worker, args=(audio_stream, chunk))
+        recording_thread.daemon = True
+        recording_thread.start()
+        
+        print("🎙️ Recording started...")
+        
+    except Exception as e:
+        print(f"Error starting recording: {e}")
+        is_recording = False
+
+def record_audio_worker(stream, chunk):
+    """Worker function for recording audio in background thread"""
+    global is_recording, audio_frames
+    
+    while is_recording:
+        try:
+            data = stream.read(chunk, exception_on_overflow=False)
+            audio_frames.append(data)
+        except Exception as e:
+            print(f"Recording error: {e}")
+            break
+
+def stop_recording():
+    """Stop audio recording and save file"""
+    global is_recording, recording_thread, audio_frames, audio_stream, p_audio
+    
+    if not is_recording:
+        return
+    
+    is_recording = False
+    
+    try:
+        # Wait for recording thread to finish
+        if recording_thread:
+            recording_thread.join(timeout=1.0)
+        
+        # Stop and close the stream
+        if audio_stream:
+            audio_stream.stop_stream()
+            audio_stream.close()
+        
+        # Terminate pyaudio
+        if p_audio:
+            p_audio.terminate()
+        
+        # Save the recording
+        if audio_frames:
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            filename = f"recording_{timestamp}.wav"
+            
+            # Write WAV file
+            wf = wave.open(filename, 'wb')
+            wf.setnchannels(1)  # Mono
+            wf.setsampwidth(p_audio.get_sample_size(pyaudio.paInt16))
+            wf.setframerate(44100)
+            wf.writeframes(b''.join(audio_frames))
+            wf.close()
+            
+            print(f"🎵 Recording saved: {filename}")
+        
+        # Reset variables
+        audio_frames = []
+        audio_stream = None
+        p_audio = None
+        recording_thread = None
+        
+    except Exception as e:
+        print(f"Error stopping recording: {e}")
+
+def toggle_recording():
+    """Toggle recording on/off"""
+    if is_recording:
+        stop_recording()
+    else:
+        start_recording()
 
 CHORDS = [
     # Major and Minor Chords
@@ -61,35 +311,17 @@ CHORDS = [
     "Cadd9", "Dadd9", "Eadd9", "Fadd9", "Gadd9", "Aadd9", "Badd9"
 ]
 
-# Syllable dictionary for High Flight and Rainbow Connection
+# Syllable dictionary for highlighted syllables only
 SYLLABLE_DICT = {
-    # High Flight words (spoken syllables)
-    "slipped": ["slipped"],
-    "surly": ["sur", "ly"], 
-    "bonds": ["bonds"],
-    "danced": ["danced"],
-    "skies": ["skies"],
-    "laughter": ["laugh", "ter"],
-    "silvered": ["sil", "verd"],  # pronounced "sil-vurd"
-    "wings": ["wings"],
-    "climbed": ["climbed"],
-    "joined": ["joined"],
-    "tumbling": ["tum", "bling"],
-    "mirth": ["mirth"],
-    "delirious": ["de", "lir", "i", "ous"],
-    "burning": ["burn", "ing"],
-    "footless": ["foot", "less"],
-    "halls": ["halls"],
-    
-    # Rainbow Connection words  
-    "rainbow": ["rain", "bow"],
-    "rainbows": ["rain", "bows"],
-    "visions": ["vi", "sions"],
-    "illusions": ["il", "lu", "sions"],
-    "believe": ["be", "lieve"],
-    "amazing": ["a", "maz", "ing"],
-    "connection": ["con", "nec", "tion"],
-    "dreamers": ["dream", "ers"],
+    # Rainbow Connection words - only the syllables that get highlighted
+    "rainbows": ["rain"],
+    "illusions": ["lus"],
+    "visions": ["vis"], 
+    "believe": ["lieve"], 
+    "amazing": ["maz"],
+    "connection": ["nec"],
+    "dreamers": ["dream"],
+    # Add more as needed based on what gets highlighted
 }
 
 # Global variable to store chord/word data
@@ -115,7 +347,7 @@ def extract_item_at_position(line, char_index):
 def extract_syllable_at_position(line, char_index):
     """Extract the specific syllable that the beat position points to."""
     if char_index >= len(line):
-        return ""
+        return "", 0, 0  # syllable, word_start, syllable_offset
     
     # Find the word at this position
     word_start = char_index
@@ -126,22 +358,58 @@ def extract_syllable_at_position(line, char_index):
     while word_end < len(line) and line[word_end] != ' ':
         word_end += 1
     
-    word = line[word_start:word_end].strip().lower()
+    raw_word = line[word_start:word_end].strip()
     
-    # Look up syllables for this word
+    # If we can't extract a word, return empty
+    if not raw_word:
+        return "", word_start, 0
+    
+    # Remove punctuation and convert to lowercase for dictionary lookup
+    import string
+    word = raw_word.lower().strip(string.punctuation)
+    
+    # Debug output
+    if DEBUG_SYLLABLE_EXTRACTION:
+        print(f"Beat position {char_index}: raw_word='{raw_word}' clean_word='{word}'")
+    
+    # Check if this word is at the beginning of the line (after any leading spaces)
+    line_start = 0
+    while line_start < len(line) and line[line_start] == ' ':
+        line_start += 1
+    
+    is_first_word = (word_start == line_start)
+    
+    # Look up syllable for this word (only one syllable per word now)
     if word in SYLLABLE_DICT:
-        syllables = SYLLABLE_DICT[word]
+        syllable = SYLLABLE_DICT[word][0]  # Always take the first (and only) syllable
         
-        # Calculate which syllable the beat position points to
-        position_in_word = char_index - word_start
-        chars_per_syllable = len(word) / len(syllables)
-        syllable_index = int(position_in_word / chars_per_syllable)
-        syllable_index = min(syllable_index, len(syllables) - 1)
+        # Make sure syllable is valid
+        if not syllable:
+            syllable = raw_word
         
-        return syllables[syllable_index]
+        # Calculate where this syllable appears in the original word
+        syllable_offset = 0
+        if syllable.lower() in word:
+            syllable_offset = word.find(syllable.lower())
+        
+        # Capitalize if this is the first word of the line
+        if is_first_word and syllable:
+            syllable = syllable[0].upper() + syllable[1:]
+        
+        if DEBUG_SYLLABLE_EXTRACTION:
+            print(f"Found syllable '{syllable}' for word '{word}' at offset {syllable_offset}")
+        
+        return syllable, word_start, syllable_offset
     
     # If word not in dictionary, return the whole word
-    return word
+    # Capitalize if this is the first word of the line
+    if is_first_word and raw_word:
+        raw_word = raw_word[0].upper() + raw_word[1:]
+    
+    if DEBUG_SYLLABLE_EXTRACTION:
+        print(f"No syllable found, returning whole word '{raw_word}'")
+    
+    return raw_word, word_start, 0
 
 def extract_chords_and_words(chord_line, lyric_line, beat_positions):
     """Extract chords and words based on character positions."""
@@ -190,6 +458,50 @@ lyric_font = pygame.font.SysFont("Courier", 40, bold=True)
 section_font = pygame.font.SysFont("Courier", 40, bold=True)
 title_font = pygame.font.SysFont("Courier", 40, bold=True)
 progress_font = pygame.font.SysFont("Courier", 40, bold=True)
+
+# Create UI buttons and controls
+button_font = pygame.font.SysFont("Courier", 24, bold=True)
+small_font = pygame.font.SysFont("Courier", 18)
+
+# Button positions (right side of screen)
+button_x = screen_width - 180
+play_pause_rect = pygame.Rect(button_x, 80, 160, 40)
+restart_rect = pygame.Rect(button_x, 130, 160, 40)
+debug_rect = pygame.Rect(button_x, 180, 160, 40)
+syllable_debug_rect = pygame.Rect(button_x, 230, 160, 40)
+
+# Button state variables
+play_pause_hovered = False
+play_pause_pressed = False
+restart_hovered = False
+restart_pressed = False
+debug_hovered = False
+debug_pressed = False
+syllable_debug_hovered = False
+syllable_debug_pressed = False
+
+# Speed slider variables
+speed_rect = pygame.Rect(button_x, 300, 160, 20)
+speed_values = [1.0, 1.25, 1.5, 1.75, 2.0]
+speed_labels = ["1.0x", "1.25x", "1.5x", "1.75x", "2.0x"]
+speed_current_index = 0
+speed_dragging = False
+
+# Base bounce duration for speed calculations
+BASE_BOUNCE_DURATION = 1.625
+
+# Original controls image coordinates (2040 x 3708 pixels)
+ORIGINAL_CONTROLS_SIZE = (2040, 3708)
+
+# Button coordinates from original image
+button_coords_original = {
+    "forward": [(63, 1953), (1866, 1851), (1888, 2048), (79, 2166)],
+    "fast_rewind": [(162, 1242), (1011, 1207), (1038, 1411), (189, 1455)],
+    "fast_forward": [(1216, 1216), (1987, 1194), (2010, 1393), (1251, 1413)],
+    "pause": [(1170, 2632), (1944, 2563), (1966, 2766), (1197, 2844)],
+    "stop_eject": [(154, 3454), (1934, 3229), (1956, 3434), (176, 3666)],
+    "record": [(136, 2702), (976, 2619), (1002, 2844), (124, 2929)]
+}
 
 def load_song_file():
     """Try auto-load first, then show file browser if needed (HTML-style approach)"""
@@ -263,10 +575,12 @@ try:
     controls_height = screen.get_height() // 3 + 72
     controls_width = int(controls_image.get_width() * controls_height / controls_image.get_height())
     controls_image = pygame.transform.scale(controls_image, (controls_width, controls_height))
+    controls_image_size = (controls_width, controls_height)
 except FileNotFoundError:
     if DEBUG_FILE_PARSING:
         print(f"Controls image not found: {CONTROLS_FILE}")
     controls_image = None
+    controls_image_size = (0, 0)
 
 # Load mag tape image (top, full width)
 try:
@@ -277,6 +591,19 @@ except FileNotFoundError:
     if DEBUG_FILE_PARSING:
         print(f"Mag tape image not found: {MAG_TAPE_FILE}")
     mag_tape_image = None
+
+# Calculate scaled button coordinates for controls image
+scaled_button_coords = {}
+if controls_image:
+    controls_x = 20
+    controls_y = screen.get_height() - controls_height - 20
+    
+    for button_name, coords in button_coords_original.items():
+        # Scale coordinates to match the scaled controls image
+        scaled_coords = scale_button_coordinates(coords, ORIGINAL_CONTROLS_SIZE, controls_image_size)
+        # Offset by the controls image position on screen
+        final_coords = offset_coordinates(scaled_coords, controls_x, controls_y)
+        scaled_button_coords[button_name] = final_coords
 
 # Ball position constant
 BALL_HIGH_POSITION = 230
@@ -452,7 +779,7 @@ if DEBUG_BEAT_ANALYSIS:
     print(f"Lyric: {lyrics[current_index % len(lyrics)]}")
     print(f"Chord: {chords[current_index % len(chords)]}")
     print(f"Beat: {beats[current_index % len(beats)]}")
-    print(f"Section: {sections[current_index % len(beats)]}")
+#    print(f"Section: {sections[current_index % len(beats)]}")
 
 # Initialize lists and dictionaries
 indexes = []
@@ -486,7 +813,7 @@ title_surface = title_font.render(title, True, (0, 255, 0))
 time_sig_surface = title_font.render(time_signature, True, (0, 255, 0))
 
 # Timing calculations based on 230 seconds song and 32 total lines
-BOUNCE_DURATION = 1.625  # seconds per bounce
+BOUNCE_DURATION = BASE_BOUNCE_DURATION
 FLASH_DURATION = BOUNCE_DURATION/4
 print("FLASH_DURATION =", FLASH_DURATION)
 BOUNCES_PER_LINE = 4
@@ -505,6 +832,13 @@ ball_bottom = screen.get_height() - 100
 fall_time = BOUNCE_DURATION / 2
 bounce_height = ball_bottom - ball_top
 gravity = (2 * bounce_height) / (fall_time ** 2)
+
+def calculateGravity():
+    """Recalculate gravity when bounce duration changes"""
+    global gravity
+    fall_time = BOUNCE_DURATION / 2
+    bounce_height = ball_bottom - ball_top
+    gravity = (2 * bounce_height) / (fall_time ** 2)
 
 def calculate_pixel_position(text, font, start_x, char_index):
     """Calculate exact pixel X position where character index appears when text is rendered"""
@@ -526,8 +860,33 @@ def render_full_line_except_words(text, font, x_pos, y_pos, default_color, skip_
     full_surface = font.render(text, True, default_color)
     screen.blit(full_surface, (x_pos, y_pos))
     
-    for char_index, word in skip_positions:
-        word_pixel_x = calculate_pixel_position(text, font, x_pos, char_index)
+    for position_data in skip_positions:
+        if len(position_data) == 2:
+            # Old format: (char_index, word)
+            char_index, word = position_data
+            word_pixel_x = calculate_pixel_position(text, font, x_pos, char_index)
+        elif len(position_data) == 4:
+            # New format: (char_index, syllable, word_start, syllable_offset)
+            char_index, syllable, word_start, syllable_offset = position_data
+            word_pixel_x = calculate_pixel_position(text, font, x_pos, word_start)
+            if syllable_offset > 0:
+                # Get the part of the word before the syllable
+                word_end = word_start
+                while word_end < len(text) and text[word_end] != ' ':
+                    word_end += 1
+                word = text[word_start:word_end].strip()
+                if len(word) > syllable_offset:
+                    word_before_syllable = word[:syllable_offset]
+                    offset_width = font.size(word_before_syllable)[0]
+                    word_pixel_x += offset_width
+            word = syllable
+        else:
+            continue
+        
+        # Make sure word is a valid string
+        if not word or not isinstance(word, str):
+            continue
+            
         word_surface = font.render(word, True, default_color)
         pygame.draw.rect(screen, (30, 30, 30), (word_pixel_x, y_pos, word_surface.get_width(), word_surface.get_height()))
 
@@ -590,11 +949,40 @@ while running:
                 circle_radius = 5
                 pygame.draw.circle(screen, (255, 255, 255), (circle_center_x, circle_center_y), circle_radius)
 
-        # Draw controls at bottom left
+        # Draw controls at bottom left and button outlines
         if controls_image:
             controls_y = screen.get_height() - controls_image.get_height() - 20
             controls_x = 20
             screen.blit(controls_image, (controls_x, controls_y))
+
+            # Debug: Print coordinate info once
+            if current_index == 0 and not waiting_for_start:  # Only print once to avoid spam
+                print(f"Controls image size: {controls_image.get_size()}")
+                print(f"Original size: 2040x3708")
+                print(f"Scale factors: {controls_image.get_width()/2040:.3f}, {controls_image.get_height()/3708:.3f}")
+                print(f"Controls position: x={controls_x}, y={controls_y}")
+                if scaled_button_coords:
+                    print(f"Sample forward button coords: {scaled_button_coords.get('forward', 'Not found')}")
+                    print(f"Number of buttons: {len(scaled_button_coords)}")
+
+            # Draw button outlines
+            for button_name, coords in scaled_button_coords.items():
+                if button_name == "forward":
+                    color = (0, 255, 0)      # Green for play
+                elif button_name == "pause":
+                    color = (255, 255, 0)    # Yellow for pause
+                elif button_name == "stop_eject":
+                    color = (255, 0, 0)      # Red for stop
+                elif button_name == "fast_rewind":
+                    color = (0, 150, 255)    # Light blue for rewind
+                elif button_name == "fast_forward":
+                    color = (0, 150, 255)    # Light blue for fast forward
+                elif button_name == "record":
+                    color = (255, 50, 50) if is_recording else (255, 0, 255)  # Bright red when recording, magenta when not
+                else:
+                    color = (255, 255, 255)  # White default
+                
+                draw_button_outline(screen, coords, color, 4 if (button_name == "record" and is_recording) else 3)
 
             if not waiting_for_start:
                 display_line_number = song_line_number
@@ -608,12 +996,18 @@ while running:
         screen.blit(title_surface, (50, POSITION_TITLE))
         screen.blit(time_sig_surface, (50, POSITION_TIME_SIGNATURE))
 
+        # Show recording indicator
+        if is_recording:
+            rec_font = pygame.font.SysFont("Courier", 24, bold=True)
+            rec_surface = rec_font.render("● REC", True, (255, 50, 50))
+            screen.blit(rec_surface, (screen_width - 100, 50))
+
         # Show start/restart message when waiting
         if waiting_for_start:
             if current_index == 0:
-                restart_text = title_font.render("Spacebar to bounce", True, (255, 255, 255))
+                restart_text = title_font.render("Spacebar or Play button to start", True, (255, 255, 255))
             else:
-                restart_text = title_font.render("Press spacebar to restart", True, (255, 255, 255))
+                restart_text = title_font.render("Spacebar or Play button to restart", True, (255, 255, 255))
 
             text_x = screen.get_width() - restart_text.get_width() - 50
             text_y = screen.get_height() - 200
@@ -625,7 +1019,11 @@ while running:
                 running = False
                 break
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+                    break
+                elif event.key == pygame.K_q:
+                    # Q quits the game
                     running = False
                     break
                 elif event.key == pygame.K_SPACE:
@@ -641,6 +1039,14 @@ while running:
                     else:
                         song_paused = True
                         pause_time = current_time
+                elif event.key == pygame.K_r:
+                    current_index = 0
+                    bounce_count = 0
+                    waiting_for_start = True
+                    ball_y = BALL_HIGH_POSITION
+                    song_line_number = 1
+                    bounce_start_time = None
+                    song_paused = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1 and circle_center_x is not None and circle_center_y is not None:
                     mouse_x, mouse_y = event.pos
@@ -649,6 +1055,72 @@ while running:
                         dragging = True
                         song_paused = True
                         waiting_for_start = False
+                
+                # Check for button clicks on controls image
+                if event.button == 1 and scaled_button_coords:
+                    clicked_button = check_button_click(event.pos, scaled_button_coords)
+                    if clicked_button:
+                        print(f"Button clicked: {clicked_button}")
+                        
+                        if clicked_button == "forward":
+                            # Same logic as spacebar - play/pause
+                            if waiting_for_start:
+                                if current_index > 0:
+                                    current_index = 0
+                                waiting_for_start = False
+                                bounce_start_time = current_time
+                            elif song_paused:
+                                pause_duration = current_time - pause_time
+                                bounce_start_time += pause_duration
+                                song_paused = False
+                            else:
+                                song_paused = True
+                                pause_time = current_time
+                        
+                        elif clicked_button == "pause":
+                            # Pause/unpause only
+                            if not waiting_for_start:
+                                if song_paused:
+                                    pause_duration = current_time - pause_time
+                                    bounce_start_time += pause_duration
+                                    song_paused = False
+                                else:
+                                    song_paused = True
+                                    pause_time = current_time
+                        
+                        elif clicked_button == "stop_eject":
+                            # Stop and restart
+                            current_index = 0
+                            bounce_count = 0
+                            waiting_for_start = True
+                            ball_y = BALL_HIGH_POSITION
+                            song_line_number = 1
+                            bounce_start_time = None
+                            song_paused = False
+                        
+                        elif clicked_button == "fast_rewind":
+                            # Jump back 5 lines
+                            if current_index >= 5:
+                                current_index -= 5
+                                song_line_number = current_index + 1
+                                bounce_count = 0
+                                ball_y = BALL_HIGH_POSITION
+                                if not waiting_for_start:
+                                    bounce_start_time = current_time
+                        
+                        elif clicked_button == "fast_forward":
+                            # Jump forward 5 lines
+                            if current_index < len(lyrics) - 5:
+                                current_index += 5
+                                song_line_number = current_index + 1
+                                bounce_count = 0
+                                ball_y = BALL_HIGH_POSITION
+                                if not waiting_for_start:
+                                    bounce_start_time = current_time
+                        
+                        elif clicked_button == "record":
+                            # Toggle recording
+                            toggle_recording()
             elif event.type == pygame.MOUSEBUTTONUP:
                 if event.button == 1 and dragging:
                     dragging = False
@@ -663,6 +1135,59 @@ while running:
                     new_index = max(0, min(new_index, 31))
                     if new_index != current_index:
                         current_index = new_index
+                
+                # Update button hover states
+                mouse_pos = pygame.mouse.get_pos()
+                play_pause_hovered = is_button_hovered(play_pause_rect, mouse_pos)
+                restart_hovered = is_button_hovered(restart_rect, mouse_pos)
+                debug_hovered = is_button_hovered(debug_rect, mouse_pos)
+                syllable_debug_hovered = is_button_hovered(syllable_debug_rect, mouse_pos)
+
+            # Handle button events
+            if is_button_clicked(play_pause_rect, event):
+                # Same logic as spacebar
+                if waiting_for_start:
+                    if current_index > 0:
+                        current_index = 0
+                    waiting_for_start = False
+                    bounce_start_time = current_time
+                elif song_paused:
+                    pause_duration = current_time - pause_time
+                    bounce_start_time += pause_duration
+                    song_paused = False
+                else:
+                    song_paused = True
+                    pause_time = current_time
+
+            if is_button_clicked(restart_rect, event):
+                # Same logic as 'R' key
+                current_index = 0
+                bounce_count = 0
+                waiting_for_start = True
+                ball_y = BALL_HIGH_POSITION
+                song_line_number = 1
+                bounce_start_time = None
+                song_paused = False
+
+            if is_button_clicked(debug_rect, event):
+                DEBUG_BEAT_ANALYSIS = not DEBUG_BEAT_ANALYSIS
+                print(f"Debug mode: {DEBUG_BEAT_ANALYSIS}")
+
+            if is_button_clicked(syllable_debug_rect, event):
+                DEBUG_SYLLABLE_EXTRACTION = not DEBUG_SYLLABLE_EXTRACTION
+                print(f"Syllable debug mode: {DEBUG_SYLLABLE_EXTRACTION}")
+
+            # Handle speed slider
+            speed_current_index, speed_dragging, speed_changed = handle_speed_slider(
+                speed_rect, speed_values, speed_current_index, event, speed_dragging
+            )
+            
+            if speed_changed:
+                # Update bounce duration based on speed
+                speed_multiplier = speed_values[speed_current_index]
+                BOUNCE_DURATION = BASE_BOUNCE_DURATION / speed_multiplier
+                calculateGravity()  # Recalculate physics
+                print(f"Speed: {speed_labels[speed_current_index]} (Duration: {BOUNCE_DURATION:.3f}s)")
 
         if not running:
             break
@@ -671,6 +1196,25 @@ while running:
         if waiting_for_start and current_index == 0 and not dragging:
             ball_y = BALL_HIGH_POSITION
             pygame.draw.circle(screen, (0, 255, 0), (ball_center_x, int(ball_y)), ball_radius)
+            
+            # Draw UI buttons and controls
+            draw_button(screen, play_pause_rect, "Play/Pause", button_font, play_pause_hovered, play_pause_pressed)
+            draw_button(screen, restart_rect, "Restart", button_font, restart_hovered, restart_pressed)
+            draw_button(screen, debug_rect, "Toggle Debug", button_font, debug_hovered, debug_pressed)
+            draw_button(screen, syllable_debug_rect, "Syllable Debug", button_font, syllable_debug_hovered, syllable_debug_pressed)
+            draw_speed_slider(screen, speed_rect, small_font, speed_values, speed_labels, speed_current_index)
+
+            # Draw controls help text
+            help_text = [
+                "Space: Play/Pause",
+                "R: Restart", 
+                "Q: Quit",
+                "Esc: Quit"
+            ]
+            for i, text in enumerate(help_text):
+                help_surface = small_font.render(text, True, (200, 200, 200))
+                screen.blit(help_surface, (button_x, 350 + i * 20))
+            
             pygame.display.flip()
             clock.tick(60)
             continue
@@ -704,10 +1248,10 @@ while running:
 
         # Display text once song has started or when waiting after song ended
         if (not waiting_for_start or (waiting_for_start and current_index > 0)) and not dragging:
-            if sections:
-                song_current_section = (sections[current_index%len(sections)])
-                section_surface = section_font.render(sections[current_index%len(sections)], True, (0, 0, 255))
-                screen.blit(section_surface, (50, POSITION_SECTION))      
+#            if sections:
+#                song_current_section = (sections[current_index%len(sections)])
+#                section_surface = section_font.render(sections[current_index%len(sections)], True, (0, 0, 255))
+#                screen.blit(section_surface, (50, POSITION_SECTION))      
                                 
             if chords and lyrics:
                 chord_text = chords[current_index % len(chords)].replace('[', '').replace(']', '')
@@ -747,10 +1291,58 @@ while running:
                     beat_progress = (dt % BOUNCE_DURATION) / BOUNCE_DURATION
                     beat_factor = beat_progress if rising else (1.0 - beat_progress)
                     
-                    for char_index, word in skip_lyric_positions:
-                        pixel_x = calculate_pixel_position(lyric_text, lyric_font, 50, char_index)
+                    for position_data in skip_lyric_positions:
+                        # Fix data structure - flatten if nested
+                        if len(position_data) == 2 and isinstance(position_data[1], tuple):
+                            # Wrong format: (char_index, (syllable, word_start, syllable_offset))
+                            char_index = position_data[0]
+                            syllable, word_start, syllable_offset = position_data[1]
+                        elif len(position_data) == 4:
+                            # Correct format: (char_index, syllable, word_start, syllable_offset)
+                            char_index, syllable, word_start, syllable_offset = position_data
+                        elif len(position_data) == 2:
+                            # Old format: (char_index, syllable)
+                            char_index, syllable = position_data
+                            pixel_x = calculate_pixel_position(lyric_text, lyric_font, 50, char_index)
+                            syllable_pixel_x = pixel_x
+                        else:
+                            continue
+                        
+                        # For new format, calculate syllable position
+                        if len(position_data) >= 4 or (len(position_data) == 2 and isinstance(position_data[1], tuple)):
+                            # Calculate where the word starts
+                            word_pixel_x = calculate_pixel_position(lyric_text, lyric_font, 50, word_start)
+                            
+                            # Calculate where the syllable appears within the word
+                            if syllable_offset > 0:
+                                # Get the part of the word before the syllable
+                                word = ""
+                                word_end = word_start
+                                while word_end < len(lyric_text) and lyric_text[word_end] != ' ':
+                                    word_end += 1
+                                word = lyric_text[word_start:word_end].strip()
+                                
+                                # Find where syllable starts in the word
+                                if len(word) > syllable_offset:
+                                    word_before_syllable = word[:syllable_offset]
+                                    offset_width = lyric_font.size(word_before_syllable)[0]
+                                    syllable_pixel_x = word_pixel_x + offset_width
+                                else:
+                                    syllable_pixel_x = word_pixel_x
+                            else:
+                                syllable_pixel_x = word_pixel_x
+                        
+                        # Make sure syllable is valid before using it
+                        if not syllable or not isinstance(syllable, str) or len(syllable.strip()) == 0:
+                            continue
+                        
                         highlight_color = interpolate_color((255, 255, 255), (0, 255, 255), beat_factor)
-                        render_word_at_position(word, lyric_font, pixel_x, POSITION_LYRIC_LINE, highlight_color)
+                        
+                        # Clear background behind syllable
+                        syllable_width = lyric_font.size(syllable)[0]
+                        pygame.draw.rect(screen, (30, 30, 30), (syllable_pixel_x, POSITION_LYRIC_LINE - 35, syllable_width, 45))
+                        
+                        render_word_at_position(syllable, lyric_font, syllable_pixel_x, POSITION_LYRIC_LINE, highlight_color)
                         
                     for char_index, chord in skip_chord_positions:
                         pixel_x = calculate_pixel_position(chord_text, chord_font, 50, char_index)
@@ -773,6 +1365,33 @@ while running:
             pygame.draw.circle(screen, (0, 255, 0), (ball_draw_x, int(ball_y)), ball_radius)
         else:
             pygame.draw.circle(screen, (238, 118, 33, 255), (ball_draw_x, int(ball_y)), ball_radius)
+
+        # Draw UI buttons and controls
+        draw_button(screen, play_pause_rect, "Play/Pause", button_font, play_pause_hovered, play_pause_pressed)
+        draw_button(screen, restart_rect, "Restart", button_font, restart_hovered, restart_pressed)
+        draw_button(screen, debug_rect, "Toggle Debug", button_font, debug_hovered, debug_pressed)
+        draw_button(screen, syllable_debug_rect, "Syllable Debug", button_font, syllable_debug_hovered, syllable_debug_pressed)
+        draw_speed_slider(screen, speed_rect, small_font, speed_values, speed_labels, speed_current_index)
+
+        # Draw controls help text
+        help_text = [
+            "KEYBOARD:",
+            "Space: Play/Pause",
+            "R: Restart", 
+            "Q: Quit",
+            "Esc: Quit",
+            "",
+            "BUTTONS:",
+            "Play/Pause: Start/Stop",
+            "Restart: Go to beginning", 
+            "Debug: Toggle console output",
+            "Syllable Debug: Debug syllables",
+            "Speed: Drag to adjust tempo"
+        ]
+        for i, text in enumerate(help_text):
+            color = (150, 150, 150) if text in ["KEYBOARD:", "BUTTONS:", ""] else (200, 200, 200)
+            help_surface = small_font.render(text, True, color)
+            screen.blit(help_surface, (button_x, 350 + i * 18))
 
         # If paused or dragging, skip timing logic
         if song_paused or dragging:
@@ -826,5 +1445,9 @@ while running:
 
         pygame.display.flip()
         clock.tick(60)
+
+# Cleanup recording if still active
+if is_recording:
+    stop_recording()
 
 pygame.quit()
