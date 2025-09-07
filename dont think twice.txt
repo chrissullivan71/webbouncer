@@ -1,9 +1,9 @@
-Don't Think Twice, It's All Right   by Bob Dylan
+﻿Don't Think Twice, It's All Right   by Bob Dylan
 4/4
 [Verse 1]
    C               G              Am         G              LL 01
 It ain't no use to sit and wonder why, baby                 LL 01
-   1               3              5            ZZZ          LL 01
+   1               3              5          7  ZZZ         LL 01
 [Verse 1]
 F                      C     G7                             LL 02 
 If'n you don't know by now                                  LL 02
