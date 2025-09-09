@@ -488,7 +488,7 @@ C           G7              C      C                        LL 43
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
         
-        const ASSET_BASE_URL = 'http://sullivanweb.me/mystuff/bball/';
+        const ASSET_BASE_URL = 'https://1eyedogbreath.github.io/webbouncer/';
         let backgroundImage = null;
         let controlsImage = null;
         let magTapeImage = null;
@@ -925,7 +925,38 @@ C           G7              C      C                        LL 43
             "farewell": ["fare", "well"],
             "unkind": ["un", "kind"],
             "anyway": ["an", "y", "way"],
-            "somethin": ["some", "thin"]
+            "somethin": ["some", "thin"],
+            
+            // Contractions
+            "whats": ["what\'s"],
+            "dont": ["don\'t"], 
+            "wont": ["won\'t"],
+            "cant": ["can\'t"],
+            "im": ["I\'m"],
+            "youre": ["you\'re"],
+            "theyre": ["they\'re"],
+            "were": ["we\'re"],
+            "isnt": ["is", "n\'t"],
+            "arent": ["are", "n\'t"],
+            "wasnt": ["was", "n\'t"],
+            "werent": ["were", "n\'t"],
+            "havent": ["have", "n\'t"],
+            "hasnt": ["has", "n\'t"],
+            "hadnt": ["had", "n\'t"],
+            "wouldnt": ["would", "n\'t"],
+            "couldnt": ["could", "n\'t"],
+            "shouldnt": ["should", "n\'t"],
+            "ive": ["I\'ve"],
+            "youve": ["you\'ve"],
+            "weve": ["we\'ve"],
+            "theyve": ["they\'ve"],
+            "hes": ["he\'s"],
+            "shes": ["she\'s"],
+            "its": ["it\'s"],
+            "thats": ["that\'s"],
+            "heres": ["here\'s"],
+            "theres": ["there\'s"],
+            "wheres": ["where\'s"]
         };
         
         function extractSyllableAtPosition(line, charIndex) {
@@ -1272,9 +1303,40 @@ C           G7              C      C                        LL 43
                 updatePlayButton();
             } else if (e.code === 'Escape' || e.code === 'KeyQ') {
                 e.preventDefault();
-                resetSong();
-                waitingForStart = true;
-                updatePlayButton();
+                running = false;
+                ctx.fillStyle = '#1e1e1e';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#00ff00';
+                ctx.font = 'bold 28px Courier New';
+                ctx.textAlign = 'center';
+                
+                // Try to get the folder path
+                let folderPath = '';
+                try {
+                    if (window.location.protocol === 'file:') {
+                        const fullPath = decodeURIComponent(window.location.pathname);
+                        const lastSlash = Math.max(fullPath.lastIndexOf('/'), fullPath.lastIndexOf('\\'));
+                        if (lastSlash > 0) {
+                            folderPath = fullPath.substring(0, lastSlash);
+                            // Clean up the path for different OS formats
+                            if (folderPath.startsWith('/') && folderPath.includes(':')) {
+                                folderPath = folderPath.substring(1); // Remove leading slash on Windows
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // Ignore errors, just won't show folder path
+                }
+                
+                ctx.fillText('To close the program you must close this tab or window,', canvas.width/2, canvas.height/2 - 40);
+                if (folderPath) {
+                    ctx.fillText('or go back to the folder you started from:', canvas.width/2, canvas.height/2);
+                    ctx.font = 'bold 24px Courier New';
+                    ctx.fillText(folderPath, canvas.width/2, canvas.height/2 + 40);
+                } else {
+                    ctx.fillText('or go back to the folder you started this program from.', canvas.width/2, canvas.height/2);
+                }
+                ctx.textAlign = 'left';
             } else if (e.code === 'KeyD') {
                 e.preventDefault();
                 debugMode = !debugMode;
@@ -1700,4 +1762,4 @@ C           G7              C      C                        LL 43
         });
     </script>
 </body>
-</html>	
+</html>
