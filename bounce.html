@@ -1,0 +1,1703 @@
+<!DOCTYPE html>
+<!--
+Copyright (c) 2025 Chris Sullivan. All rights reserved.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bouncing Ball Teleprompter (BBT)</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1e1e1e;
+            color: white;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        
+        #gameCanvas {
+            display: block;
+            background: #1e1e1e;
+            cursor: pointer;
+        }
+        
+        #songSelector {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: 2px solid #00ff00;
+            padding: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border-radius: 5px;
+        }
+        
+        #loadingStatus {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            color: #00ff00;
+            padding: 5px;
+            font-size: 12px;
+        }
+        
+        #playButton {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(0,200,0,0.8);
+            color: white;
+            border: 2px solid #00ff00;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #playButton:hover {
+            background: rgba(0,255,0,0.9);
+        }
+        
+        #playButton.paused {
+            background: rgba(200,100,0,0.8);
+            border-color: #ff8800;
+        }
+        
+        #restartButton {
+            position: absolute;
+            top: 60px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(200,0,0,0.8);
+            color: white;
+            border: 2px solid #ff0000;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            z-index: 100;
+            color: #00ff00;
+            font-size: 12px;
+            text-align: right;
+            max-width: 300px;
+        }
+
+        #speedControl {
+            position: absolute;
+            top: 110px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            border: 2px solid #00ff00;
+            padding: 10px;
+            border-radius: 5px;
+            color: white;
+            font-size: 12px;
+        }
+
+        #speedSlider {
+            width: 160px;
+            margin: 5px 0;
+        }
+
+        #debugInfo {
+            position: absolute;
+            top: 200px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(0,0,0,0.8);
+            border: 2px solid #ffff00;
+            padding: 10px;
+            border-radius: 5px;
+            color: #ffff00;
+            font-size: 11px;
+            max-width: 300px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <select id="songSelector">
+        <option value="">Select Song...</option>
+        <option value="rainbow">Rainbow Connection</option>
+        <option value="dylan">Don't Think Twice, It's All Right</option>
+    </select>
+    <div id="loadingStatus">Select a song to begin...</div>
+    <button id="playButton">▶ PLAY</button>
+    <button id="restartButton">↻ RESET</button>
+    
+    <div id="speedControl">
+        <div>Speed Control:</div>
+        <input type="range" id="speedSlider" min="0" max="4" value="0" step="1">
+        <div id="speedLabel">Speed: 1.0x</div>
+    </div>
+
+    <div id="debugInfo">
+        <div>DEBUG MODE ACTIVE</div>
+        <div id="debugData"></div>
+    </div>
+    
+    <div id="controls">
+        <strong>KEYBOARD:</strong><br>
+        Space: Play/Pause<br>
+        R: Restart<br>
+        Q/Esc: Quit<br>
+        D: Toggle Debug<br><br>
+        <strong>TAPE MACHINE:</strong><br>
+        Forward (green): Play/Pause<br>
+        Fast Forward/Rewind: Line skip<br>
+        Pause (yellow): Pause toggle<br>
+        Stop (red): Restart<br>
+        Record: Debug mode<br>
+        Playback Mode (top): Mode cycle<br><br>
+        <strong>DRAG:</strong><br>
+        Magnetic tape: Scrub position
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // Embedded song data with real content
+        const embeddedSongs = {
+            rainbow: `The Rainbow Connection  Words and Music by Paul Williams
+3/4
+
+[Verse 1]
+C             Am      Dm          G7        
+Why are there so many songs about rainbows,
+1             4       7           10            ZZZ               LL 01	
+[Verse 1]
+C                 Am    Dm    G7
+And what's on the other side?
+    1             4     7     10                 ZZZ              LL 02	
+[Verse 1]	
+C            Am           Dm     G7           
+Rainbows are visions, but only illusions,
+1            4            7      10                     ZZZ       LL 03	
+[Verse 1]
+    C             Am         Dm    G7
+And rainbows have nothing to hide.       
+    1             4          7     10                 ZZZ         LL 04
+[Verse 1]	
+Fmaj7                                             
+So we've been told and some choose to believe it, 
+1             4             7           10               ZZZ      LL 05
+[Verse 1]          
+Em           
+I know they're wrong; wait and see.
+1              4               7                          ZZZ     LL 06
+[Chorus]
+Dm             G7           Em         A7       
+Some day we'll find it, the rainbow connection, 
+1              4            7          10                 ZZZ     LL 07
+[Chorus]
+    Dm          G7            C
+The lovers, the dreamers, and me.
+    1           4             7                           ZZZ     LL 08
+[Verse 2]
+C             Am              Dm           G7        
+Who said that every wish will be heard and answered,
+1             4               7            10             ZZZ     LL 09
+[Verse 2]
+     C             Am      Dm     G7
+When wished on the morning star?
+     1             4       7      10                         ZZZ  LL 10
+[Verse 2]
+C        Am                  Dm        G7         
+Somebody thought of that and someone believed it, 
+1        4                   7         10                   ZZZ   LL 11
+[Verse 2]
+    C              Am      Dm     G7
+And look what it's done so far.
+    1              4       7      10                        ZZZ   LL 12
+[Verse 2]
+Fmaj7                                       
+What's so amazing that keeps us stargazing, 
+1          4           7            10                      ZZZ   LL 13
+[Verse 2]
+    Em 
+and what do we think we might see?
+    1          4              7                             ZZZ   LL 14
+[Chorus]
+Dm             G7           Em        A7        
+Some day we'll find it, the rainbow connection, 
+1              4            7          10                  ZZZ    LL 15
+[Chorus]
+    Dm          G7           C
+The lovers, the dreamers and me.
+    1           4            7                             ZZZ    LL 16
+[Bridge]
+Em        Dm        C         Fmaj7          
+All of us under its spell, we know that it's 
+1         4         7         10                           ZZZ    LL 17
+[Bridge]
+C        Dm   G7
+probably ma - gic.
+1        4    7                                            ZZZ    LL 18
+[Verse 3]
+C             Am              Dm             G7      
+Have you been half asleep and have you heard voices, 
+1             4               7              10              ZZZ  LL 19
+[Verse 3]
+C               Am         Dm
+I've heard them calling my name.
+1               4          7       10                        ZZZ  LL 20
+[Verse 3]
+C           Am               Dm              G7       
+Is this the sweet sound that calls the young sailors? 
+1           4                7               10              ZZZ  LL 21
+[Verse 3]
+    C              Am          Dm     G7
+The voice might be one and the same.
+    1              4           7      10                      ZZZ LL 22
+[Verse 3]	
+Fmaj7                                    
+I've heard it too many times to ignore it
+1             4        7          10                   ZZZ        LL 23
+[Verse 3]
+     Em
+It's something that I'm supposed to be.
+     1              4               7                  ZZZ        LL 24	 
+[Chorus]
+Dm            G7          Em         A7       
+Someday we'll find it the rainbow connection,
+1             4           7          10                  ZZZ      LL 25       
+[Verse 3]
+    Dm          G7           C
+The lovers, the dreamers and me.
+    1           4            7                           ZZZ      LL 26
+[Bridge, end]
+Em        Dm         C      Dm       
+Da dee da dee dum de da, da da dee da
+1         4          7      10                           ZZZ      LL 27
+[Bridge, end]
+G7      C
+dum dee dee
+1       4                                                ZZZ      LL 28`,
+
+            dylan: `Don't Think Twice, It's All Right   by Bob Dylan
+4/4
+[Verse 1]
+   C               G              Am         G              LL 01
+It ain't no use to sit and wonder why, baby                 LL 01
+   1               3              5          7  ZZZ         LL 01
+[Verse 1]
+F                      C     G7                             LL 02 
+If'n you don't know by now                                  LL 02
+1                      5     7      ZZZ                     LL 02
+[Verse 1]
+       C               G              Am         G          LL 03
+An' it ain't no use to sit and wonder why, baby             LL 03
+       1               3              5          7  ZZZ     LL 03
+[Verse 1]
+D7              G          G7                               LL 04
+It'll never do, somehow                                     LL 04
+1               5          7     ZZZ                        LL 04
+[Verse 1]
+          C                    C7                           LL 05
+When your rooster crows at the break of dawn                LL 05
+          1                    5       ZZZ                  LL 05
+[Verse 1]
+F                        D7                                 LL 06
+Look out your window and I'll be gone                       LL 06
+1                        5    ZZZ                           LL 06
+[Verse 1]
+C          G            Am        F                         LL 07
+You're the reason I'm a trav'lin' on                        LL 07
+1          3            5         7    ZZZ                  LL 07
+[Chorus]
+C           G7              C      G7                       LL 08
+Don't think twice, it's all right                           LL 08
+1           3               5      7    ZZZ                 LL 08
+[Verse 1]
+C     G     Am    F    C                                    LL 09
+(Harmonica break)                                           LL 09
+1     3     5     7    8      ZZZ                           LL 09
+[Verse 2]
+   C               G               Am           G           LL 10
+It ain't no use in turnin' on your light, babe              LL 10
+   1               3               5            7   ZZZ     LL 10
+[Verse 2]
+F                 C       G7                                LL 11
+The light I never knowed                                    LL 11
+1                 5       7        ZZZ                      LL 11
+[Verse 2]
+       C               G               Am           G       LL 12
+An' it ain't no use in turnin' on your light, babe          LL 12
+       1               3               5            7  ZZZ  LL 12
+[Verse 2]
+D7                          G      G7                       LL 13
+I'm on the dark side of the road                            LL 13
+1                           5      7     ZZZ                LL 13
+[Verse 2]
+  C                                  C7                     LL 14
+I wish there was somethin' you would do or say              LL 14
+  1                                  5    ZZZ               LL 14
+[Verse 2]
+   F                         D7                             LL 15
+To try and make me change my mind and stay                  LL 15
+   1                         5    ZZZ                       LL 15
+[Verse 2]
+C        G            Am      F                             LL 16
+We never did too much talkin' anyway                        LL 16
+1        3            5       7      ZZZ                    LL 16	
+[Chorus]
+C              G7              C      G7                    LL 17
+So don't think twice, it's all right                        LL 17
+   1           3               5      7  ZZZ                LL 17
+[Verse 2]
+C     G     Am    F     C                                   LL 18
+(Harmonica break)                                           LL 18
+1     3     5     7     8   ZZZ                             LL 18
+[Verse 3]
+      C               G              Am        G            LL 19
+No it ain't no use in callin' out my name, gal              LL 19
+      1               3              5         7     ZZZ    LL 19
+[Verse 3]
+F                   C       G7                              LL 20
+Like you never done before                                  LL 20
+1                   5       7    ZZZ                        LL 20
+[Verse 3]
+   C               G              Am         G              LL 21
+It ain't no use in callin' out my name, gal                 LL 21
+   1               3              5          7   ZZZ        LL 21
+[Verse 3]
+D7               G        G7                                LL 22
+I can't hear you anymore                                    LL 22
+1                5        7          ZZZ                    LL 22
+[Verse 3]
+      C                        C7                           LL 23
+I'm a-thinkin' and a-wond'rin' walkin' down the road        LL 23
+      1                        5      ZZZ                   LL 23
+[Verse 3]
+F                       D7                                  LL 24
+I once loved a woman, a child I'm told                      LL 24
+1                       5       ZZZ                         LL 24
+[Verse 3]
+  C           G             Am        G                     LL 25
+I give her my heart but she wanted my soul                  LL 25
+1             3             5         7     ZZZ             LL 25
+[Chorus]
+C           G               C        G7                     LL 26
+Don't think twice, it's all right                           LL 26
+1           3               5        7     ZZZ              LL 26
+[Verse 3]
+C     G     Am    F     C                                   LL 27
+(Harmonica break)                                           LL 27
+1     3     5     7         ZZZ                             LL 27
+[Verse 4]
+C     G          Am                                         LL 28
+So lo-ong, honey babe                                       LL 28
+1     3          5     ZZZ                                  LL 28
+[Verse 4]
+          F              C       G7                         LL 29
+Where I'm bound, I can't tell                               LL 29
+          1              5       7         ZZZ              LL 29
+[Verse 4]
+C          G           Am        G                          LL 30
+Goodbye is too good a word, gal                             LL 30
+1          3           5         7     ZZZ                  LL 30
+[Verse 4]
+D7                         G         G7                     LL 31
+So I'll just say fare thee well                             LL 31
+1                          5         7       ZZZ            LL 31
+[Verse 4]
+C                          C7                               LL 32
+I ain't sayin' you treated me unkind                        LL 32
+1                          5     ZZZ                        LL 32
+[Verse 4]
+F                              D7                           LL 33
+You could have done better but I don't mind                 LL 33
+1                              5           ZZZ              LL 33
+[Verse 4]
+C              G         Am       G                         LL 34
+You just kinda wasted my precious time                      LL 34
+1              3         5        7      ZZZ                LL 34
+[Chorus]
+C               G7          C                               LL 35
+But don't think twice, it's alright                         LL 35
+1               3           5         ZZZ                   LL 35
+[Verse 5]
+   C               G              Am         G              LL 36
+(Harmonica break)                                           LL 36
+   1               3              5          7   ZZZ        LL 36
+[Verse 5]
+F                      C     G7                             LL 37 
+(Harmonica break)                                           LL 37
+1                      5     7      ZZZ                     LL 37
+[Verse 5]
+       C               G              Am         G          LL 38
+(Harmonica break)                                           LL 38
+       1               3              5          7  ZZZ     LL 38
+[Verse 5]
+D7              G          G7                               LL 39
+(Harmonica break)                                           LL 39
+1               5          7     ZZZ                        LL 39
+[Verse 5]
+          C                    C7                           LL 40
+(Harmonica break)                                           LL 40
+          1                    5       ZZZ                  LL 40
+[Verse 5]
+F                        D7                                 LL 41
+(Harmonica break)                                           LL 41
+1                        5    ZZZ                           LL 41
+[Verse 5]
+C          G            Am        F                         LL 42
+(Harmonica break)                                           LL 42
+1          3            5         7    ZZZ                  LL 42
+[Chorus]
+C           G7              C      C                        LL 43
+(Harmonica break)                                           LL 43
+1           3               5      7    ZZZ                 LL 43`
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const playButton = document.getElementById('playButton');
+        const restartButton = document.getElementById('restartButton');
+        const songSelector = document.getElementById('songSelector');
+        const speedSlider = document.getElementById('speedSlider');
+        const speedLabel = document.getElementById('speedLabel');
+        const debugInfo = document.getElementById('debugInfo');
+        const debugData = document.getElementById('debugData');
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        const ASSET_BASE_URL = 'http://sullivanweb.me/mystuff/bball/';
+        let backgroundImage = null;
+        let controlsImage = null;
+        let magTapeImage = null;
+        let iconImage = null;
+
+        // Tape machine button coordinates (from Python version)
+        const ORIGINAL_CONTROLS_SIZE = {width: 2040, height: 3708};
+        const BUTTON_COORDS_ORIGINAL = {
+            "playback_mode": [[200, 30], [1800, 30], [1800, 180], [200, 180]],
+            "forward": [[63, 1953], [1866, 1851], [1888, 2048], [79, 2166]],
+            "fast_rewind": [[162, 1242], [1011, 1207], [1038, 1411], [189, 1455]],
+            "fast_forward": [[1216, 1216], [1987, 1194], [2010, 1393], [1251, 1413]],
+            "pause": [[1170, 2632], [1944, 2563], [1966, 2766], [1197, 2844]],
+            "stop_eject": [[154, 3454], [1934, 3229], [1956, 3434], [176, 3666]],
+            "record": [[136, 2702], [976, 2619], [1002, 2844], [124, 2929]]
+        };
+
+        let scaledButtonCoords = {};
+        let playbackMode = "normal"; // normal, playback_idle, playback_active
+        let debugMode = false;
+        
+        function loadAssets() {
+            const loadingStatus = document.getElementById('loadingStatus');
+            let loadedCount = 0;
+            
+            function checkComplete() {
+                loadedCount++;
+                if (loadedCount === 4) {
+                    console.log('All assets loaded');
+                    scaleButtonCoords();
+                }
+            }
+            
+            backgroundImage = new Image();
+            backgroundImage.onload = checkComplete;
+            backgroundImage.onerror = () => {
+                console.log('Background image failed to load');
+                checkComplete();
+            };
+            backgroundImage.src = ASSET_BASE_URL + 'background.jpg';
+            
+            controlsImage = new Image();
+            controlsImage.onload = () => {
+                scaleButtonCoords();
+                checkComplete();
+            };
+            controlsImage.onerror = () => {
+                console.log('Controls image failed to load');
+                checkComplete();
+            };
+            controlsImage.src = ASSET_BASE_URL + 'controls.jpg';
+            
+            magTapeImage = new Image();
+            magTapeImage.onload = checkComplete;
+            magTapeImage.onerror = () => {
+                console.log('Mag tape image failed to load');
+                checkComplete();
+            };
+            magTapeImage.src = ASSET_BASE_URL + 'magtape.jpg';
+            
+            iconImage = new Image();
+            iconImage.onload = checkComplete;
+            iconImage.onerror = () => {
+                console.log('Icon image failed to load');
+                checkComplete();
+            };
+            iconImage.src = ASSET_BASE_URL + 'icon.png';
+        }
+
+        function scaleButtonCoordinates(originalCoords, originalImageSize, scaledImageSize) {
+            const scaleX = scaledImageSize.width / originalImageSize.width;
+            const scaleY = scaledImageSize.height / originalImageSize.height;
+            
+            return originalCoords.map(coord => [
+                Math.floor(coord[0] * scaleX),
+                Math.floor(coord[1] * scaleY)
+            ]);
+        }
+
+        function offsetCoordinates(coords, offsetX, offsetY) {
+            return coords.map(coord => [coord[0] + offsetX, coord[1] + offsetY]);
+        }
+
+        function scaleButtonCoords() {
+            if (!controlsImage || !controlsImage.complete) return;
+            
+            scaledButtonCoords = {};
+            const controlsHeight = canvas.height / 3 + 72;
+            const controlsWidth = (controlsImage.width * controlsHeight) / controlsImage.height;
+            const controlsX = 20;
+            const controlsY = canvas.height - controlsHeight - 20;
+            
+            const scaledImageSize = {width: controlsWidth, height: controlsHeight};
+            
+            for (const [buttonName, coords] of Object.entries(BUTTON_COORDS_ORIGINAL)) {
+                const scaledCoords = scaleButtonCoordinates(coords, ORIGINAL_CONTROLS_SIZE, scaledImageSize);
+                const finalCoords = offsetCoordinates(scaledCoords, controlsX, controlsY);
+                scaledButtonCoords[buttonName] = finalCoords;
+            }
+        }
+
+        function pointInPolygon(point, polygon) {
+            const [x, y] = point;
+            let inside = false;
+            
+            let j = polygon.length - 1;
+            for (let i = 0; i < polygon.length; i++) {
+                const [xi, yi] = polygon[i];
+                const [xj, yj] = polygon[j];
+                
+                if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+                    inside = !inside;
+                }
+                j = i;
+            }
+            
+            return inside;
+        }
+
+        function checkButtonClick(pos, buttonCoords) {
+            for (const [buttonName, coords] of Object.entries(buttonCoords)) {
+                if (pointInPolygon(pos, coords)) {
+                    return buttonName;
+                }
+            }
+            return null;
+        }
+
+        function handleControlsClick(mousePos) {
+            const clickedButton = checkButtonClick([mousePos.x, mousePos.y], scaledButtonCoords);
+            
+            if (clickedButton) {
+                const currentTime = performance.now() / 1000;
+                console.log(`Controls button clicked: ${clickedButton}`);
+                
+                if (clickedButton === "playback_mode") {
+                    // Cycle through playback modes
+                    if (playbackMode === "normal") {
+                        playbackMode = "playback_idle";
+                        console.log("Switched to playback mode (idle)");
+                    } else if (playbackMode === "playback_idle") {
+                        playbackMode = "playback_active";
+                        console.log("Started playback mode (active)");
+                    } else {
+                        playbackMode = "normal";
+                        console.log("Returned to normal mode");
+                    }
+                } else if (clickedButton === "forward") {
+                    // Main play/pause button
+                    togglePlayback();
+                } else if (clickedButton === "fast_forward") {
+                    // Jump to next line
+                    if (currentIndex < lyrics.length - 1) {
+                        currentIndex++;
+                        bounceCount = 0;
+                        bounceStartTime = currentTime;
+                        ballY = BALL_HIGH_POSITION;
+                        songLineNumber++;
+                        console.log(`Fast forward to line ${currentIndex + 1}`);
+                    } else {
+                        console.log(`Already at last line ${lyrics.length}`);
+                    }
+                } else if (clickedButton === "fast_rewind") {
+                    // Jump to previous line
+                    if (currentIndex > 0) {
+                        currentIndex--;
+                        bounceCount = 0;
+                        bounceStartTime = currentTime;
+                        ballY = BALL_HIGH_POSITION;
+                        songLineNumber--;
+                        console.log(`Rewind to line ${currentIndex + 1}`);
+                    } else {
+                        console.log("Already at first line");
+                    }
+                } else if (clickedButton === "pause") {
+                    // Pause/unpause toggle
+                    if (!waitingForStart) {
+                        if (songPaused) {
+                            const pauseDuration = currentTime - pauseTime;
+                            bounceStartTime += pauseDuration;
+                            songPaused = false;
+                            console.log("Unpaused from controls");
+                        } else {
+                            songPaused = true;
+                            pauseTime = currentTime;
+                            console.log("Paused from controls");
+                        }
+                        updatePlayButton();
+                    }
+                } else if (clickedButton === "stop_eject") {
+                    // Restart song
+                    resetSong();
+                    waitingForStart = true;
+                    updatePlayButton();
+                    console.log("Restarted from controls");
+                } else if (clickedButton === "record") {
+                    // Toggle debug mode
+                    debugMode = !debugMode;
+                    debugInfo.style.display = debugMode ? 'block' : 'none';
+                    console.log(`Debug mode: ${debugMode}`);
+                }
+                
+                return true;
+            }
+            
+            return false;
+        }
+
+        function drawButtonOutlines() {
+            if (!scaledButtonCoords || Object.keys(scaledButtonCoords).length === 0) return;
+            
+            for (const [buttonName, coords] of Object.entries(scaledButtonCoords)) {
+                if (coords.length < 3) continue;
+                
+                let color;
+                if (buttonName === "playback_mode") {
+                    if (playbackMode === "normal") {
+                        color = [0, 180, 0];
+                    } else if (playbackMode === "playback_idle") {
+                        color = [200, 200, 0];
+                    } else {
+                        color = [200, 0, 0];
+                    }
+                } else if (buttonName === "forward") {
+                    color = [0, 255, 0];
+                } else if (buttonName === "pause") {
+                    color = [255, 255, 0];
+                } else if (buttonName === "stop_eject") {
+                    color = [255, 0, 0];
+                } else if (buttonName === "fast_rewind" || buttonName === "fast_forward") {
+                    color = [0, 150, 255];
+                } else if (buttonName === "record") {
+                    color = debugMode ? [255, 50, 50] : [0, 255, 0];
+                } else {
+                    color = [255, 255, 255];
+                }
+                
+                ctx.strokeStyle = colorToString(color);
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(coords[0][0], coords[0][1]);
+                for (let i = 1; i < coords.length; i++) {
+                    ctx.lineTo(coords[i][0], coords[i][1]);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            }
+        }
+        
+        loadAssets();
+        
+        const POSITION_TITLE = 120;
+        const POSITION_TIME_SIGNATURE = 150;
+        const POSITION_SECTION = 180;
+        const POSITION_CHORDS = 210;
+        const POSITION_LYRIC_LINE = 240;
+        const BALL_HIGH_POSITION = 230;
+        
+        // Speed control
+        const speedValues = [1.0, 1.25, 1.5, 1.75, 2.0];
+        const speedLabels = ["1.0x", "1.25x", "1.5x", "1.75x", "2.0x"];
+        let currentSpeedIndex = 0;
+        const BASE_BOUNCE_DURATION = 1.625;
+        
+        speedSlider.addEventListener('input', function() {
+            currentSpeedIndex = parseInt(speedSlider.value);
+            const speedMultiplier = speedValues[currentSpeedIndex];
+            BOUNCE_DURATION = BASE_BOUNCE_DURATION / speedMultiplier;
+            speedLabel.textContent = `Speed: ${speedLabels[currentSpeedIndex]}`;
+            
+            // Recalculate gravity for new bounce duration
+            initBallPhysics();
+            
+            console.log(`Speed: ${speedLabels[currentSpeedIndex]} (Duration: ${BOUNCE_DURATION.toFixed(3)}s)`);
+        });
+        
+        // Song-specific timing constants - will be set when song is loaded
+        let BOUNCE_DURATION = BASE_BOUNCE_DURATION;
+        let BOUNCES_PER_LINE = 8;
+        
+        let songData = {};
+        let sections = [], chords = [], lyrics = [], beats = [];
+        let beatChordWordData = {};
+        let BEAT_NUMBERS = [];
+        let currentIndex = 0;
+        let bounceCount = 0;
+        let waitingForStart = true;
+        let songPaused = false;
+        let running = true;
+        let songLineNumber = 1;
+        let isDragging = false;
+        let currentSongKey = '';
+        
+        let ballY = BALL_HIGH_POSITION;
+        let ballCenterX = 0;
+        const ballRadius = 25;
+        const ballTop = BALL_HIGH_POSITION;
+        let ballBottom = 0;
+        let bounceStartTime = null;
+        let gravity = 0;
+        let rising = false;
+        let falling = true;
+        
+        function initBallPhysics() {
+            ballCenterX = canvas.width / 2;
+            ballBottom = canvas.height - 100;
+            const fallTime = BOUNCE_DURATION / 2;
+            const bounceHeight = ballBottom - ballTop;
+            gravity = (2 * bounceHeight) / (fallTime ** 2);
+        }
+        
+        function cleanText(text) {
+            return text.trim();
+        }
+        
+        function getRidOfLL(cleanedLine) {
+            cleanedLine = cleanedLine.replace(/\t/g, '    ');
+            
+            if (cleanedLine.includes('LL')) {
+                const llIndex = cleanedLine.indexOf('LL');
+                cleanedLine = cleanedLine.substring(0, llIndex).trimEnd();
+                
+                if (cleanedLine.includes('ZZZ')) {
+                    const zzzIndex = cleanedLine.indexOf('ZZZ');
+                    cleanedLine = cleanedLine.substring(0, zzzIndex).trimEnd();
+                }
+            }
+            return cleanedLine;
+        }
+        
+        function findBeatPositions(beatLine) {
+            const beats = [];
+            const regex = /\d+/g;
+            let match;
+            while ((match = regex.exec(beatLine)) !== null) {
+                const beatNum = parseInt(match[0]);
+                if (beatNum >= 1 && beatNum <= 15) {
+                    beats.push([beatNum, match.index]);
+                }
+            }
+            return beats;
+        }
+        
+        function extractItemAtPosition(line, charIndex) {
+            if (charIndex >= line.length) return "";
+            
+            let start = charIndex;
+            while (start > 0 && line[start-1] !== ' ') {
+                start--;
+            }
+            
+            let end = charIndex;
+            while (end < line.length && line[end] !== ' ') {
+                end++;
+            }
+            
+            return line.substring(start, end).trim();
+        }
+        
+        // Syllable dictionary for word highlighting (from your Python version)
+        const SYLLABLE_DICT = {
+            "slipped": ["slipped"],
+            "surly": ["sur", "ly"], 
+            "bonds": ["bonds"],
+            "danced": ["danced"],
+            "skies": ["skies"],
+            "laughter": ["laugh", "ter"],
+            "silvered": ["sil", "verd"],
+            "wings": ["wings"],
+            "climbed": ["climbed"],
+            "joined": ["joined"],
+            "tumbling": ["tum", "bling"],
+            "mirth": ["mirth"],
+            "delirious": ["de", "lir", "i", "ous"],
+            "burning": ["burn", "ing"],
+            "footless": ["foot", "less"],
+            "halls": ["halls"],
+            "rainbow": ["rain", "bow"],
+            "rainbows": ["rain", "bows"],
+            "visions": ["vi", "sions"],
+            "illusions": ["il", "lu", "sions"],
+            "believe": ["be", "lieve"],
+            "believed": ["be", "lieved"],
+            "amazing": ["a", "maz", "ing"],
+            "connection": ["con", "nec", "tion"],
+            "dreamers": ["dream", "ers"],
+            "answered": ["an", "swered"],
+            "morning": ["morn", "ing"],
+            "stargazing": ["star", "gaz", "ing"],
+            "probably": ["prob", "ab", "ly"],
+            "voices": ["voic", "es"],
+            "calling": ["call", "ing"],
+            "sailors": ["sail", "ors"],
+            "ignore": ["ig", "nore"],
+            "supposed": ["sup", "posed"],
+            "something": ["some", "thing"],
+            "other": ["oth", "er"],
+            "under": ["un", "der"],
+            "magic": ["mag", "ic"],
+            "asleep": ["a", "sleep"],
+            "lovers": ["lov", "ers"],
+            "someday": ["some", "day"],
+            "only": ["on", "ly"],
+            "wonder": ["won", "der"],
+            "baby": ["ba", "by"],
+            "never": ["nev", "er"],
+            "somehow": ["some", "how"],
+            "rooster": ["roos", "ter"],
+            "window": ["win", "dow"],
+            "reason": ["rea", "son"],
+            "turnin": ["turn", "in"],
+            "turning": ["turn", "ing"],
+            "callin": ["call", "in"],
+            "calling": ["call", "ing"],
+            "thinkin": ["think", "in"],
+            "thinking": ["think", "ing"],
+            "wondrin": ["wond", "rin"],
+            "wondering": ["won", "der", "ing"],
+            "walking": ["walk", "ing"],
+            "woman": ["wom", "an"],
+            "wanted": ["want", "ed"],
+            "treated": ["treat", "ed"],
+            "better": ["bet", "ter"],
+            "precious": ["pre", "cious"],
+            "harmonica": ["har", "mon", "i", "ca"],
+            "honey": ["hon", "ey"],
+            "goodbye": ["good", "bye"],
+            "talkin": ["talk", "in"],
+            "talking": ["talk", "ing"],
+            "kinda": ["kind", "a"],
+            "wasted": ["wast", "ed"],
+            "travelin": ["trav", "el", "in"],
+            "anymore": ["an", "y", "more"], 
+            "farewell": ["fare", "well"],
+            "unkind": ["un", "kind"],
+            "anyway": ["an", "y", "way"],
+            "somethin": ["some", "thin"]
+        };
+        
+        function extractSyllableAtPosition(line, charIndex) {
+            // Extract the specific syllable that the beat position points to
+            if (charIndex >= line.length) return "";
+            
+            // Find the word at this position
+            let wordStart = charIndex;
+            while (wordStart > 0 && line[wordStart-1] !== ' ') {
+                wordStart--;
+            }
+            
+            let wordEnd = charIndex;
+            while (wordEnd < line.length && line[wordEnd] !== ' ') {
+                wordEnd++;
+            }
+            
+            const word = line.substring(wordStart, wordEnd).trim().toLowerCase();
+            
+            // Clean punctuation before dictionary lookup
+            const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
+            
+            // Check if this is the first word of the line
+            const isFirstWord = wordStart === 0 || line.substring(0, wordStart).trim() === "";
+            
+            let result;
+            
+            // Look up syllables for this word
+            if (cleanWord in SYLLABLE_DICT) {
+                const syllables = SYLLABLE_DICT[cleanWord];
+                const positionInWord = charIndex - wordStart;
+                
+                // Special handling for known words
+                if (cleanWord === "rainbow") {
+                    result = positionInWord < 4 ? "rain" : "bow";
+                } else if (cleanWord === "rainbows") {
+                    result = positionInWord < 4 ? "rain" : "bows";
+                } else {
+                    // Calculate actual syllable boundaries based on character counts
+                    const syllableBoundaries = [];
+                    let charCount = 0;
+                    for (const syllable of syllables) {
+                        charCount += syllable.length;
+                        syllableBoundaries.push(charCount);
+                    }
+                    
+                    // Find which syllable contains this position
+                    result = syllables[syllables.length - 1]; // Default to last syllable
+                    for (let i = 0; i < syllableBoundaries.length; i++) {
+                        if (positionInWord < syllableBoundaries[i]) {
+                            result = syllables[i];
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // If word not in dictionary, return the clean word (no punctuation)
+                result = cleanWord;
+            }
+            
+            // Capitalize first word of line unless escaped with backslash
+            const originalWord = line.substring(wordStart, wordEnd).trim();
+            if (isFirstWord) {
+                // Check for escape character
+                if (originalWord.startsWith('\\')) {
+                    // Remove escape character and keep lowercase
+                    result = result.toLowerCase();
+                } else {
+                    // Always capitalize first word unless escaped
+                    result = result.charAt(0).toUpperCase() + result.slice(1);
+                }
+            }
+            
+            return result;
+        }
+        
+        function extractChordsAndWords(chordLine, lyricLine, beatPositions) {
+            const results = [];
+            for (const [beatNum, charIndex] of beatPositions) {
+                const chord = extractItemAtPosition(chordLine, charIndex);
+                const word = extractItemAtPosition(lyricLine, charIndex);
+                results.push([beatNum, chord, word]);
+            }
+            return results;
+        }
+        
+        const CHORDS = [
+            "C", "D", "E", "F", "G", "A", "B",
+            "Cm", "Dm", "Em", "Fm", "Gm", "Am", "Bm",
+            "C7", "D7", "E7", "F7", "G7", "A7", "B7",
+            "Cm7", "Dm7", "Em7", "Fm7", "Gm7", "Am7", "Bm7",
+            "Cmaj7", "Dmaj7", "Emaj7", "Fmaj7", "Gmaj7", "Amaj7", "Bmaj7",
+            "C♭", "D♭", "E♭", "F♭", "G♭", "A♭", "B♭",
+            "C♯", "D♯", "E♯", "F♯", "G♯", "A♯", "B♯"
+        ];
+        
+        function checkForChordLine(line, chords) {
+            if (!line) return false;
+            const words = line.split(/\s+/).filter(word => word.trim());
+            const fortyPercentCount = Math.floor(0.4 * words.length);
+            let matchCount = 0;
+            
+            for (const word of words) {
+                const cleanWord = word.replace(/[\[\]]/g, '');
+                if (chords.includes(cleanWord)) {
+                    matchCount++;
+                }
+            }
+            return matchCount >= fortyPercentCount;
+        }
+        
+        function categorizeLine(line) {
+            const cleanedLine = cleanText(line);
+            
+            if (cleanedLine.includes('[') && cleanedLine.includes(']')) {
+                return "sections";
+            }
+            
+            if (checkForChordLine(cleanedLine, CHORDS)) {
+                return "chords";
+            }
+            
+            const pattern = /[a-zA-Z\s]+/;
+            if (pattern.test(cleanedLine)) {
+                if (!cleanedLine.includes('ZZZ')) {
+                    return "lyrics";
+                } else if (cleanedLine.includes('ZZZ')) {
+                    return "beats";
+                }
+            }
+            
+            return "unknown";
+        }
+        
+        function parseTimeSignature(timeSignatureStr) {
+            try {
+                if (timeSignatureStr.includes('/')) {
+                    const parts = timeSignatureStr.split('/');
+                    return [parseInt(parts[0]), parseInt(parts[1])];
+                }
+            } catch (e) {
+                console.log(`Could not parse time signature: ${timeSignatureStr}, using 4/4`);
+            }
+            return [4, 4];
+        }
+        
+        function processSongData(data) {
+            const lines = data.split('\n').filter(line => line.trim());
+            
+            const title = lines[0] || "[No title]";
+            const timeSignatureStr = lines[1] || "4/4";
+            const remainingLines = lines.slice(2);
+            
+            // Parse time signature and set song-specific timing
+            const [beatsPerMeasure, noteValue] = parseTimeSignature(timeSignatureStr);
+            
+            // Set bounces per line and bounce duration based on time signature and song
+            if (beatsPerMeasure === 3) {      // 3/4 time (Rainbow Connection)
+                BOUNCES_PER_LINE = 4;
+                BOUNCE_DURATION = BASE_BOUNCE_DURATION;
+            } else {                          // 4/4 time (Don't Think Twice)
+                BOUNCES_PER_LINE = 4;
+                BOUNCE_DURATION = BASE_BOUNCE_DURATION;
+            }
+            
+            // Apply speed multiplier
+            const speedMultiplier = speedValues[currentSpeedIndex];
+            BOUNCE_DURATION = BASE_BOUNCE_DURATION / speedMultiplier;
+            
+            console.log(`Time signature: ${beatsPerMeasure}/${noteValue}, Bounces per line: ${BOUNCES_PER_LINE}, Bounce duration: ${BOUNCE_DURATION}`);
+            
+            sections = [];
+            chords = [];
+            lyrics = [];
+            beats = [];
+            beatChordWordData = {};
+            
+            for (let i = 0; i < remainingLines.length; i++) {
+                const line = remainingLines[i];
+                const lineType = categorizeLine(line);
+                
+                if (lineType === "sections") {
+                    sections.push(line);
+                } else if (lineType === "chords") {
+                    chords.push(line);
+                } else if (lineType === "lyrics") {
+                    lyrics.push(line);
+                } else if (lineType === "beats") {
+                    beats.push(line);
+                    
+                    const cleanedBeatLine = getRidOfLL(line);
+                    const beatPositions = findBeatPositions(cleanedBeatLine);
+                    const beatLineIndex = beats.length - 1;
+                    
+                    if (beatLineIndex < chords.length && beatLineIndex < lyrics.length) {
+                        const chordLine = getRidOfLL(chords[beatLineIndex]);
+                        const lyricLine = getRidOfLL(lyrics[beatLineIndex]);
+                        const chordWordData = extractChordsAndWords(chordLine, lyricLine, beatPositions);
+                        beatChordWordData[beatLineIndex] = chordWordData;
+                    }
+                }
+            }
+            
+            for (let i = 0; i < Math.max(lyrics.length, chords.length, beats.length, sections.length); i++) {
+                if (i < lyrics.length) lyrics[i] = getRidOfLL(lyrics[i]);
+                if (i < chords.length) chords[i] = getRidOfLL(chords[i]);
+                if (i < beats.length) beats[i] = getRidOfLL(beats[i]);
+                if (i < sections.length) sections[i] = getRidOfLL(sections[i]);
+            }
+            
+            console.log(`Loaded: ${sections.length} sections, ${chords.length} chords, ${lyrics.length} lyrics, ${beats.length} beats`);
+            
+            // Extract beat numbers from first beat line (like Python version)
+            if (beats.length > 0) {
+                const firstBeatLine = beats[0];
+                BEAT_NUMBERS = [];
+                const regex = /\d+/g;
+                let match;
+                while ((match = regex.exec(firstBeatLine)) !== null) {
+                    const beatNum = parseInt(match[0]);
+                    if (beatNum >= 1 && beatNum <= 15) {
+                        BEAT_NUMBERS.push(beatNum);
+                    }
+                }
+                console.log("Beat numbers (from file):", BEAT_NUMBERS);
+            } else {
+                BEAT_NUMBERS = [];
+                console.log("⚠️ No beat numbers found in file!");
+            }
+            
+            songData.title = title;
+            songData.timeSignature = timeSignatureStr;
+        }
+        
+        // Song selection handler
+        songSelector.addEventListener('change', function(e) {
+            const songKey = e.target.value;
+            if (!songKey) {
+                document.getElementById('loadingStatus').textContent = 'Select a song to begin...';
+                return;
+            }
+            
+            loadEmbeddedSong(songKey);
+        });
+        
+        // Load embedded song function
+        function loadEmbeddedSong(songKey) {
+            const loadingStatus = document.getElementById('loadingStatus');
+            currentSongKey = songKey;
+            
+            if (songKey === 'rainbow') {
+                loadingStatus.textContent = 'Loading Rainbow Connection...';
+            } else if (songKey === 'dylan') {
+                loadingStatus.textContent = 'Loading Don\'t Think Twice...';
+            } else {
+                loadingStatus.textContent = 'Unknown song selection';
+                return;
+            }
+            
+            const songText = embeddedSongs[songKey];
+            if (songText) {
+                processSongData(songText);
+                initBallPhysics();
+                resetSong();
+                loadingStatus.style.display = 'none';
+                console.log(`Loaded embedded song: ${songKey}`);
+            } else {
+                loadingStatus.textContent = `Song not found: ${songKey}`;
+                loadingStatus.style.color = '#ff0000';
+            }
+        }
+        
+        function interpolateColor(color1, color2, factor) {
+            const r = Math.floor(color1[0] + (color2[0] - color1[0]) * factor);
+            const g = Math.floor(color1[1] + (color2[1] - color1[1]) * factor);
+            const b = Math.floor(color1[2] + (color2[2] - color1[2]) * factor);
+            return [r, g, b];
+        }
+        
+        function colorToString(color) {
+            return `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+        }
+        
+        function resetSong() {
+            currentIndex = 0;
+            bounceCount = 0;
+            ballY = BALL_HIGH_POSITION;
+            bounceStartTime = null;
+            songPaused = false;
+            songLineNumber = 1;
+            rising = false;
+            falling = true;
+            waitingForStart = true;
+            updatePlayButton();
+        }
+        
+        function updatePlayButton() {
+            if (waitingForStart) {
+                playButton.textContent = currentIndex === 0 ? "▶ PLAY" : "↻ RESTART";
+                playButton.className = '';
+            } else if (songPaused) {
+                playButton.textContent = "▶ PLAY";
+                playButton.className = 'paused';
+            } else {
+                playButton.textContent = "⏸ PAUSE";
+                playButton.className = '';
+            }
+        }
+        
+        function togglePlayback() {
+            if (!currentSongKey) {
+                alert('Please select a song first');
+                return;
+            }
+            
+            if (waitingForStart) {
+                if (currentIndex > 0) {
+                    resetSong();
+                }
+                waitingForStart = false;
+                bounceStartTime = performance.now() / 1000;
+            } else if (songPaused) {
+                const pauseDuration = (performance.now() / 1000) - pauseTime;
+                bounceStartTime += pauseDuration;
+                songPaused = false;
+            } else {
+                songPaused = true;
+                pauseTime = performance.now() / 1000;
+            }
+            updatePlayButton();
+        }
+        
+        let pauseTime = 0;
+        
+        // Keyboard controls
+        document.addEventListener('keydown', function(e) {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePlayback();
+            } else if (e.code === 'KeyR') {
+                e.preventDefault();
+                resetSong();
+                waitingForStart = true;
+                updatePlayButton();
+            } else if (e.code === 'Escape' || e.code === 'KeyQ') {
+                e.preventDefault();
+                resetSong();
+                waitingForStart = true;
+                updatePlayButton();
+            } else if (e.code === 'KeyD') {
+                e.preventDefault();
+                debugMode = !debugMode;
+                debugInfo.style.display = debugMode ? 'block' : 'none';
+                console.log(`Debug mode: ${debugMode}`);
+            }
+        });
+        
+        // Canvas click/touch controls
+        canvas.addEventListener('click', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mousePos = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+            
+            // Check if clicking on controls image first
+            if (Object.keys(scaledButtonCoords).length > 0 && handleControlsClick(mousePos)) {
+                return; // Controls handled the click
+            }
+            
+            // Check if clicking on progress indicator
+            if (isInProgressIndicator(mousePos.x, mousePos.y)) {
+                isDragging = true;
+                handleProgressDrag(e.clientX, e.clientY);
+                return;
+            }
+            
+            // Otherwise, general play/pause
+            e.preventDefault();
+            togglePlayback();
+        });
+        
+        canvas.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                const touchPos = {
+                    x: touch.clientX - rect.left,
+                    y: touch.clientY - rect.top
+                };
+                
+                // Check controls first
+                if (Object.keys(scaledButtonCoords).length > 0 && handleControlsClick(touchPos)) {
+                    e.preventDefault();
+                    return;
+                }
+                
+                // Check progress indicator
+                if (isInProgressIndicator(touchPos.x, touchPos.y)) {
+                    isDragging = true;
+                    handleProgressDrag(touch.clientX, touch.clientY);
+                    e.preventDefault();
+                    return;
+                }
+                
+                // General play/pause
+                e.preventDefault();
+                togglePlayback();
+            }
+        });
+        
+        // Play button controls
+        playButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            togglePlayback();
+        });
+        
+        playButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            togglePlayback();
+        });
+        
+        // Restart button controls  
+        restartButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            resetSong();
+            waitingForStart = true;
+            updatePlayButton();
+        });
+        
+        restartButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            resetSong();
+            waitingForStart = true;
+            updatePlayButton();
+        });
+        
+        // Progress indicator drag functionality
+        function getProgressIndicatorRect() {
+            if (magTapeImage && magTapeImage.complete) {
+                const tapeHeight = canvas.height / 8;
+                return {
+                    x: 0,
+                    y: 0,
+                    width: canvas.width,
+                    height: tapeHeight
+                };
+            }
+            return null;
+        }
+        
+        function isInProgressIndicator(x, y) {
+            const rect = getProgressIndicatorRect();
+            return rect && x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+        }
+        
+        function handleProgressDrag(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+            
+            if (lyrics.length > 0) {
+                const progress = Math.max(0, Math.min(1, x / canvas.width));
+                const newIndex = Math.floor(progress * lyrics.length);
+                currentIndex = Math.min(newIndex, lyrics.length - 1);
+                songLineNumber = currentIndex + 1;
+                bounceCount = 0;
+                ballY = BALL_HIGH_POSITION;
+                bounceStartTime = performance.now() / 1000;
+            }
+        }
+        
+        // Mouse drag events
+        document.addEventListener('mousemove', function(e) {
+            if (isDragging) {
+                handleProgressDrag(e.clientX, e.clientY);
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('mouseup', function(e) {
+            if (isDragging) {
+                isDragging = false;
+                e.preventDefault();
+            }
+        });
+        
+        // Touch drag events
+        document.addEventListener('touchmove', function(e) {
+            if (isDragging && e.touches.length === 1) {
+                const touch = e.touches[0];
+                handleProgressDrag(touch.clientX, touch.clientY);
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('touchend', function(e) {
+            if (isDragging) {
+                isDragging = false;
+                e.preventDefault();
+            }
+        });
+        
+        // Prevent context menu on long press
+        canvas.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        });
+        
+        function renderText(text, x, y, color, fontSize = 40) {
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            ctx.fillStyle = colorToString(color);
+            ctx.fillText(text, x, y);
+        }
+        
+        function calculatePixelPosition(text, x, charIndex, fontSize = 40) {
+            if (charIndex >= text.length) return x;
+            
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            const textBefore = text.substring(0, charIndex);
+            const width = ctx.measureText(textBefore).width;
+            return x + width;
+        }
+        
+        function renderWordAtPosition(word, x, y, color, fontSize = 40) {
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            ctx.fillStyle = colorToString(color);
+            ctx.fillText(word, x, y);
+        }
+        
+        function render() {
+            if (!running) return;
+            
+            const currentTime = performance.now() / 1000;
+            
+            // Clear canvas
+            ctx.fillStyle = '#1e1e1e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw background
+            if (backgroundImage && backgroundImage.complete && backgroundImage.naturalWidth > 0) {
+                ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+            }
+            
+            // Draw magnetic tape at top
+            if (magTapeImage && magTapeImage.complete && magTapeImage.naturalWidth > 0) {
+                const tapeHeight = canvas.height / 8;
+                ctx.drawImage(magTapeImage, 0, 0, canvas.width, tapeHeight);
+                
+                // Draw position indicator
+                if (!waitingForStart && lyrics.length > 0) {
+                    const indicatorWidth = 8;
+                    const positionX = (currentIndex / lyrics.length) * canvas.width;
+                    const indicatorHeight = tapeHeight / 2;
+                    const indicatorY = tapeHeight / 4;
+                    
+                    const rectX = Math.max(0, Math.min(positionX - indicatorWidth / 2, canvas.width - indicatorWidth));
+                    
+                    ctx.fillStyle = colorToString([0, 255, 0]);
+                    ctx.fillRect(rectX, indicatorY, indicatorWidth, indicatorHeight);
+                    
+                    // Draw circle for drag handle
+                    ctx.beginPath();
+                    ctx.arc(rectX + indicatorWidth / 2, indicatorY + indicatorHeight / 2, 5, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fill();
+                }
+            }
+            
+            // Draw controls image and button outlines
+            if (controlsImage && controlsImage.complete && controlsImage.naturalWidth > 0) {
+                const controlsHeight = canvas.height / 3 + 72;
+                const controlsWidth = (controlsImage.width * controlsHeight) / controlsImage.height;
+                const controlsY = canvas.height - controlsHeight - 20;
+                const controlsX = 20;
+                
+                ctx.drawImage(controlsImage, controlsX, controlsY, controlsWidth, controlsHeight);
+                
+                // Draw button outlines for visual feedback
+                drawButtonOutlines();
+                
+                // Draw line number on controls
+                if (!waitingForStart) {
+                    ctx.font = 'bold 40px Courier New';
+                    ctx.fillStyle = colorToString([0, 255, 0]);
+                    const progressText = String(songLineNumber).padStart(3, '0');
+                    ctx.fillText(progressText, controlsX + 50, controlsY + 60);
+                }
+            }
+            
+            // Rescale button coordinates if canvas size changed
+            if (controlsImage && controlsImage.complete) {
+                scaleButtonCoords();
+            }
+            
+            // Draw title and time signature
+            if (songData.title) {
+                renderText(songData.title, 50, POSITION_TITLE, [0, 255, 0]);
+            }
+            if (songData.timeSignature) {
+                renderText(songData.timeSignature, 50, POSITION_TIME_SIGNATURE, [0, 255, 0]);
+            }
+            
+            // Draw messages
+            if (waitingForStart && !currentSongKey) {
+                const message = "Select a song to begin";
+                renderText(message, canvas.width - 400, canvas.height - 100, [255, 255, 255]);
+            } else if (waitingForStart) {
+                const message = currentIndex === 0 ? "Tap to bounce" : "Tap to restart";
+                renderText(message, canvas.width - 300, canvas.height - 100, [255, 255, 255]);
+            }
+            
+            // Draw lyrics, chords, and sections with highlighting
+            if (lyrics.length > 0 && chords.length > 0 && ((!waitingForStart) || (waitingForStart && currentIndex > 0))) {
+                const chordText = chords[currentIndex % chords.length].replace(/\[|\]/g, '');
+                const lyricText = lyrics[currentIndex % lyrics.length];
+                
+                let highlightingActive = false;
+                const shouldHighlightBall = currentIndex in beatChordWordData && rising;
+                
+                if (shouldHighlightBall) {
+                    const currentBeatData = beatChordWordData[currentIndex];
+                    // Use correct beat number calculation like Python version
+                    const currentBeatNumber = BEAT_NUMBERS.length > 0 ? 
+                        BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length] : (bounceCount + 1);
+                    
+                    for (const [beatNum, chord, word] of currentBeatData) {
+                        if (beatNum === currentBeatNumber) {
+                            highlightingActive = true;
+                            
+                            const dt = currentTime - bounceStartTime;
+                            const beatProgress = (dt % BOUNCE_DURATION) / BOUNCE_DURATION;
+                            const beatFactor = rising ? beatProgress : (1.0 - beatProgress);
+                            
+                            // Render base text
+                            renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+                            renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
+                            
+                            // Find beat positions and highlight
+                            const beatPositions = findBeatPositions(getRidOfLL(beats[currentIndex]));
+                            
+                            for (const [bNum, charIndex] of beatPositions) {
+                                if (bNum === beatNum) {
+                                    if (word) {
+                                        const syllable = extractSyllableAtPosition(lyricText, charIndex);
+                                        const pixelX = calculatePixelPosition(lyricText, 50, charIndex);
+                                        const highlightColor = interpolateColor([255, 255, 255], [0, 255, 255], beatFactor);
+                                        
+                                        // Clear background for highlighted word
+                                        ctx.fillStyle = '#1e1e1e';
+                                        const syllableWidth = ctx.measureText(syllable).width;
+                                        ctx.fillRect(pixelX, POSITION_LYRIC_LINE - 35, syllableWidth, 45);
+                                        
+                                        // Draw highlighted syllable
+                                        renderWordAtPosition(syllable, pixelX, POSITION_LYRIC_LINE, highlightColor);
+                                    }
+                                    
+                                    if (chord) {
+                                        const pixelX = calculatePixelPosition(chordText, 50, charIndex);
+                                        const highlightColor = interpolateColor([255, 165, 0], [255, 255, 0], beatFactor);
+                                        
+                                        // Clear background for highlighted chord
+                                        ctx.fillStyle = '#1e1e1e';
+                                        const chordWidth = ctx.measureText(chord).width;
+                                        ctx.fillRect(pixelX, POSITION_CHORDS - 35, chordWidth, 45);
+                                        
+                                        // Draw highlighted chord
+                                        renderWordAtPosition(chord, pixelX, POSITION_CHORDS, highlightColor);
+                                    }
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                
+                if (!highlightingActive) {
+                    renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+                    renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
+                }
+                
+                if (sections.length > 0) {
+                    renderText(sections[currentIndex % sections.length], 50, POSITION_SECTION, [0, 0, 255]);
+                }
+            }
+            
+            // Update debug info
+            if (debugMode && debugData) {
+                let debugText = `Line: ${currentIndex + 1}/${lyrics.length}\n`;
+                debugText += `Bounce: ${bounceCount}/${BOUNCES_PER_LINE}\n`;
+                debugText += `Beat Numbers: [${BEAT_NUMBERS.join(', ')}]\n`;
+                debugText += `Playback Mode: ${playbackMode}\n`;
+                debugText += `Speed: ${speedLabels[currentSpeedIndex]}\n`;
+                debugText += `Duration: ${BOUNCE_DURATION.toFixed(3)}s\n`;
+                if (BEAT_NUMBERS.length > 0) {
+                    const currentBeatNumber = BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length];
+                    debugText += `Current Beat: ${currentBeatNumber}\n`;
+                }
+                debugData.innerHTML = debugText.replace(/\n/g, '<br>');
+            }
+            
+            // Ball physics and movement
+            if (!songPaused && !waitingForStart && bounceStartTime !== null) {
+                const dt = currentTime - bounceStartTime;
+                
+                if (dt <= BOUNCE_DURATION) {
+                    const fallTime = BOUNCE_DURATION / 2;
+                    
+                    if (dt <= fallTime) {
+                        falling = true;
+                        rising = false;
+                        ballY = ballTop + 0.5 * gravity * (dt ** 2);
+                        if (ballY >= ballBottom) ballY = ballBottom;
+                    } else {
+                        const riseTime = dt - fallTime;
+                        falling = false;
+                        rising = true;
+                        const remainingRiseTime = fallTime - riseTime;
+                        ballY = ballTop + 0.5 * gravity * (remainingRiseTime ** 2);
+                        if (ballY < ballTop) ballY = ballTop;
+                    }
+                } else {
+                    // Complete bounce cycle - start new bounce
+                    bounceStartTime = currentTime;
+                    ballY = ballTop;
+                    bounceCount++;
+                    
+                    // Advance text every BOUNCES_PER_LINE bounces
+                    if (bounceCount >= BOUNCES_PER_LINE) {
+                        bounceCount = 0;
+                        if (lyrics.length > 0) {
+                            if (currentIndex < lyrics.length - 1) {
+                                currentIndex++;
+                                songLineNumber++;
+                            } else {
+                                waitingForStart = true;
+                                updatePlayButton();
+                            }
+                        }
+                    }
+                }
+            } else if (waitingForStart) {
+                ballY = BALL_HIGH_POSITION;
+            }
+            
+            // Draw ball with highlighting
+            const shouldHighlightBall = currentIndex in beatChordWordData && rising && BEAT_NUMBERS.length > 0 &&
+                beatChordWordData[currentIndex].some(([beatNum]) => beatNum === BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length]);
+            
+            ctx.beginPath();
+            ctx.arc(ballCenterX, ballY, ballRadius, 0, 2 * Math.PI);
+            ctx.fillStyle = shouldHighlightBall ? '#00ff00' : '#ee7621';
+            ctx.fill();
+            
+            requestAnimationFrame(render);
+        }
+        
+        // Initialize and start
+        initBallPhysics();
+        updatePlayButton();
+        render();
+        
+        // Make canvas focusable for keyboard input
+        canvas.setAttribute('tabindex', '0');
+        canvas.focus();
+        
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            resizeCanvas();
+            initBallPhysics();
+            scaleButtonCoords();
+        });
+    </script>
+</body>
+</html>	
