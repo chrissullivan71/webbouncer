@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
+    <link rel="icon" type="image/png" href="icon.png">
+    <title>High Flight Teleprompter - With Iambic Pentameter</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1e1e1e;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: none;
+        }
+        
+        #gameCanvas {
+            display: block;
+            cursor: default;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: none;
+        }
+        
+        .hidden {
+            display: none;
+        }
+
+        #recordingInstructions {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border: 3px solid #ff6600;
+            border-radius: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 24px;
+            text-align: center;
+            z-index: 1000;
+            display: none;
+            max-width: 600px;
+        }
+
+        #recordingInstructions h2 {
+            color: #ff6600;
+            margin-top: 0;
+            font-size: 32px;
+        }
+
+        #recordingInstructions .step {
+            margin: 15px 0;
+            padding: 10px;
+            background: rgba(255, 102, 0, 0.1);
+            border-left: 4px solid #ff6600;
+        }
+    </style>
+</head>
+<body>
+    <div id="recordingInstructions">
+        <h2>🎙️ AUDIO COORDINATION SETUP</h2>
+        <div class="step">1. Start Total Recorder for recording</div>
+        <div class="step">2. Set it to record from Roland UA-4FX</div>
+        <div class="step">3. Use Audition for audio playback</div>
+        <div class="step">4. Recording and playback are mutually exclusive</div>
+        <div class="step">5. Listen for different beep patterns</div>
+        <br>
+        <button onclick="closeRecordingInstructions()" style="
+            background: #ff6600; 
+            color: white; 
+            border: none; 
+            padding: 15px 30px; 
+            font-size: 20px; 
+            font-family: 'Courier New', monospace;
+            border-radius: 5px;
+            cursor: pointer;">OK - AUDIO APPS READY</button>
+    </div>
+
+    <canvas id="gameCanvas" width="1920" height="1020"></canvas>
+
+    <script>
+        // High Flight poem - clean text only, blank line removed
+        const HIGH_FLIGHT_LINES = [
+            "Oh! I have slipped the surly bonds of Earth",
+            "And danced the skies on laughter-silvered wings;",
+            "Sunward I've climbed, and joined the tumbling mirth",
+            "of sun-split clouds, — and done a hundred things",
+            "You have not dreamed of – wheeled and soared and swung",
+            "High in the sunlit silence. Hov'ring there,",
+            "I've chased the shouting wind along, and flung",
+            "My eager craft through footless halls of air....",
+            "Up, up the long, delirious, burning blue",
+            "I've topped the wind-swept heights with easy grace.",
+            "Where never lark, or even eagle flew —",
+            "And, while with silent, lifting mind I've trod",
+            "The high untrespassed sanctity of space,",
+            "Put out my hand, and touched the face of God."
+        ];
+
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Screen dimensions
+        const SCREEN_WIDTH = 1920;
+        const SCREEN_HEIGHT = 1020;
+        
+        // Application state
+        let applicationRunning = true;
+        let animationFrameId = null;
+        let initialScrollOffset = 0;
+        
+        function setupCanvas() {
+            canvas.width = SCREEN_WIDTH;
+            canvas.height = SCREEN_HEIGHT;
+            
+            canvas.style.width = '100vw';
+            canvas.style.height = '100vh';
+            canvas.style.position = 'fixed';
+            canvas.style.left = '0';
+            canvas.style.top = '0';
+            canvas.style.objectFit = 'fill';
+            
+            return 1.0;
+        }
+        
+        let canvasScale = setupCanvas();
+        
+        // Position constants
+        const POSITION_TITLE = 120;
+        
+        // Scrolling variables - tuned for 2-minute poem at 1.0x speed
+        let scrollOffset = 0.0;
+        const baseScrollSpeed = 7.5; // pixels per second for 2-minute poem
+        let lastTime = Date.now();
+        
+        let currentLine = 0;
+        let waitingForStart = true;
+        let songPaused = false;
+        let currentPoemLine = 1; // Global variable for current line display
+        
+        // Speed control variables - middle position is 2-minute default
+        const speedValues = [0.5, 0.75, 1.0, 1.25, 1.5];
+        const speedLabels = ["0.5x", "0.75x", "1.0x", "1.25x", "1.5x"];
+        let speedCurrentIndex = 2; // Start at middle position (1.0x = 2 minutes)
+        let speedDragging = false;
+        
+        // Iambic pentameter meter variables
+        let meterBarEnabled = true;
+        let meterStartTime = 0;
+        const baseBeatsPerLine = 5;
+        let breathingPauseAdded = false;
+        let previousLineNumber = -1;
+        const baseLineTime = 8.571; // seconds per line at 1.0x speed (2 minutes / 14 lines)
+        
+        // Button state variables
+        let playPauseHovered = false;
+        let restartHovered = false;
+        
+        // Total Recorder coordination variables
+        let totalRecorderMode = false;
+        let recordingActive = false;
+        
+        // Playback mode variables
+        let playbackMode = "normal";
+        let audioFile = null;
+        let audioPosition = 0.0;
+        
+        // Image assets
+        let backgroundImage = null;
+        let controlsImage = null;
+        let magTapeImage = null;
+        
+        // Controls image sizing and positioning
+        let controlsImageSize = { width: 0, height: 0 };
+        let controlsX = 20;
+        let controlsY = 0;
+        let controlsHeight = 0;
+        let controlsWidth = 0;
+        
+        function calculateControlsSize() {
+            controlsHeight = Math.floor(SCREEN_HEIGHT / 3) + 72;
+            controlsWidth = Math.floor(controlsHeight * (ORIGINAL_CONTROLS_SIZE.width / ORIGINAL_CONTROLS_SIZE.height));
+            controlsY = SCREEN_HEIGHT - controlsHeight - 20;
+            controlsImageSize = { width: controlsWidth, height: controlsHeight };
+        }
+        
+        // Original controls image coordinates (2040 x 3708 pixels)
+        const ORIGINAL_CONTROLS_SIZE = { width: 2040, height: 3708 };
+        
+        // Button coordinates from original image
+        const buttonCoordsOriginal = {
+            "playback_mode": [[200, 30], [1800, 30], [1800, 180], [200, 180]],
+            "forward": [[63, 1953], [1866, 1851], [1888, 2048], [79, 2166]],
+            "fast_rewind": [[162, 1242], [1011, 1207], [1038, 1411], [189, 1455]],
+            "fast_forward": [[1216, 1216], [1987, 1194], [2010, 1393], [1251, 1413]],
+            "pause": [[1170, 2632], [1944, 2563], [1966, 2766], [1197, 2844]],
+            "stop_eject": [[154, 3454], [1934, 3229], [1956, 3434], [176, 3666]],
+            "record": [[136, 2702], [976, 2619], [1002, 2844], [124, 2929]]
+        };
+        
+        let scaledButtonCoords = {};
+        
+        // UI button rectangles
+        const buttonX = SCREEN_WIDTH - 180;
+        const playPauseRect = { x: buttonX, y: 80, width: 160, height: 40 };
+        const restartRect = { x: buttonX, y: 130, width: 160, height: 40 };
+        const speedRect = { x: buttonX, y: 300, width: 160, height: 20 };
+        const meterToggleRect = { x: buttonX, y: 180, width: 160, height: 40 };
+        
+        // Meter bar drawing function
+        function drawMeterBar() {
+            if (!meterBarEnabled || waitingForStart || songPaused) {
+                return;
+            }
+            
+            const currentTime = Date.now();
+            const currentSpeed = speedValues[speedCurrentIndex];
+            const lineTime = baseLineTime / currentSpeed; // Adjust line time for speed
+            
+            // Calculate which line we're on and position within that line
+            const timeSinceStart = (currentTime - meterStartTime) / 1000;
+            const lineNumber = Math.floor(timeSinceStart / lineTime);
+            
+            if (lineNumber !== previousLineNumber) {
+                breathingPauseAdded = false;
+                previousLineNumber = lineNumber;
+            }
+            
+            const currentBeatsPerLine = breathingPauseAdded ? 6 : baseBeatsPerLine;
+            const beatTime = lineTime / currentBeatsPerLine;
+            
+            const timeInLine = timeSinceStart % lineTime;
+            const currentBeat = Math.floor(timeInLine / beatTime);
+            const progressInBeat = (timeInLine % beatTime) / beatTime;
+            
+            // Make currentBeat globally accessible for B key
+            window.currentBeat = currentBeat;
+            
+            // Meter bar position and size
+            const barX = SCREEN_WIDTH - 30;
+            const barWidth = 20;
+            const barMaxHeight = 200;
+            const barBaseY = SCREEN_HEIGHT / 2 + 100;
+            
+            // Calculate bar height based on current beat
+            let barHeight = 0;
+            
+            if (currentBeat < 5) {
+                // During stressed beats (1-5): bar grows then shrinks
+                const beatProgress = progressInBeat < 0.5 ? progressInBeat * 2 : (1 - progressInBeat) * 2;
+                barHeight = beatProgress * barMaxHeight;
+            } else {
+                // During breathing pause (beat 6): bar stays low
+                barHeight = Math.sin(progressInBeat * Math.PI) * (barMaxHeight * 0.2);
+            }
+            
+            // Draw the meter bar
+            const barY = barBaseY - barHeight;
+            
+            // Bar color - different for stressed beats vs breathing pause
+            let barColor;
+            if (currentBeat < 5) {
+			// Stressed beats - light to dark brown
+				const intensity = barHeight / barMaxHeight;
+				barColor = `rgb(${Math.floor(139 + 60 * intensity)}, ${Math.floor(69 + 30 * intensity)}, ${Math.floor(19 + 10 * intensity)})`;
+			} else {
+			// Breathing pause - muted tan
+				const intensity = barHeight / (barMaxHeight * 0.2);
+				barColor = `rgb(${Math.floor(160 + 50 * intensity)}, ${Math.floor(140 + 40 * intensity)}, ${Math.floor(100 + 30 * intensity)})`;
+			}
+            
+            // Draw bar background
+            ctx.fillStyle = 'rgba(100, 100, 100, 0.3)';
+            ctx.fillRect(barX, barBaseY - barMaxHeight, barWidth, barMaxHeight);
+            
+            // Draw active bar
+            ctx.fillStyle = barColor;
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            // Draw bar outline
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(barX, barBaseY - barMaxHeight, barWidth, barMaxHeight);
+            
+            // Label
+            ctx.fillStyle = 'white';
+            ctx.font = '14px "Courier New"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText('METER', barX + barWidth/2, barBaseY - barMaxHeight - 20);
+            
+            // Beat indicator
+            const beatText = currentBeat < 5 ? `${currentBeat + 1}/5` : 'BREATHE';
+            ctx.fillText(beatText, barX + barWidth/2, barBaseY + 10);
+        }
+        
+        // Audio cue functions
+        function playBeep(frequency, duration, volume) {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration / 1000);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration / 1000);
+        }
+        
+        function playStartRecordingBeep() {
+            playBeep(600, 150, 0.15);
+            setTimeout(function() { playBeep(800, 150, 0.15); }, 200);
+            setTimeout(function() { playBeep(1000, 300, 0.15); }, 400);
+        }
+        
+        function playStopRecordingBeep() {
+            playBeep(800, 200, 0.15);
+            setTimeout(function() { playBeep(400, 400, 0.15); }, 300);
+        }
+        
+        function playStartPlaybackBeep() {
+            playBeep(1200, 100, 0.15);
+            setTimeout(function() { playBeep(1200, 100, 0.15); }, 150);
+        }
+        
+        function playStopPlaybackBeep() {
+            playBeep(300, 500, 0.15);
+        }
+        
+        // Application control functions
+        function quitApplication() {
+            console.log('Quitting High Flight Teleprompter...');
+            applicationRunning = false;
+            
+            if (totalRecorderMode) {
+                stopTotalRecorderCoordination();
+            }
+            
+            if (playbackMode === "playback_active") {
+                stopAuditionPlayback();
+            }
+            
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            
+            // Navigate back to the folder containing this HTML file
+            const currentUrl = window.location.href;
+            const folderUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/'));
+            window.location.href = folderUrl;
+        }
+        
+        // Total Recorder coordination functions
+        function startTotalRecorderCoordination() {
+            if (totalRecorderMode) {
+                return;
+            }
+            
+            console.log('🎙️ Starting Total Recorder coordination...');
+            totalRecorderMode = true;
+            recordingActive = true;
+            
+            playStartRecordingBeep();
+            
+            setTimeout(function() {
+                console.log('▶️ START RECORDING IN TOTAL RECORDER NOW!');
+            }, 100);
+        }
+        
+        function stopTotalRecorderCoordination() {
+            if (!totalRecorderMode) {
+                return;
+            }
+            
+            console.log('🛑 Stopping Total Recorder coordination...');
+            totalRecorderMode = false;
+            recordingActive = false;
+            
+            playStopRecordingBeep();
+            
+            setTimeout(function() {
+                console.log('⏹️ STOP RECORDING IN TOTAL RECORDER NOW!');
+            }, 100);
+        }
+        
+        function toggleTotalRecorderCoordination() {
+            if (totalRecorderMode) {
+                stopTotalRecorderCoordination();
+            } else {
+                if (playbackMode !== "normal") {
+                    console.log("🚫 Cannot record while in playback mode - stop playback first");
+                    playBeep(200, 200, 0.2);
+                    return;
+                }
+                startTotalRecorderCoordination();
+            }
+        }
+        
+        function startAuditionPlayback() {
+            if (totalRecorderMode) {
+                console.log("🚫 Cannot start playback while recording - stop recording first");
+                playBeep(200, 200, 0.2);
+                return;
+            }
+            
+            console.log('🎵 Starting Audition playback coordination...');
+            playStartPlaybackBeep();
+            
+            setTimeout(function() {
+                console.log('▶️ START PLAYBACK IN AUDITION NOW!');
+            }, 100);
+        }
+        
+        function stopAuditionPlayback() {
+            console.log('🛑 Stopping Audition playback coordination...');
+            playStopPlaybackBeep();
+            
+            setTimeout(function() {
+                console.log('⏹️ STOP PLAYBACK IN AUDITION NOW!');
+            }, 100);
+        }
+        
+        function showRecordingInstructions() {
+            document.getElementById('recordingInstructions').style.display = 'block';
+        }
+        
+        function closeRecordingInstructions() {
+            document.getElementById('recordingInstructions').style.display = 'none';
+        }
+        
+        // Fast forward/rewind functions
+        function jumpToNextLine() {
+            const lineHeight = 60;
+            const maxLines = HIGH_FLIGHT_LINES.filter(l => l.trim()).length;
+            const currentScrollLine = Math.floor((scrollOffset - initialScrollOffset) / lineHeight);
+            
+            if (currentScrollLine < maxLines - 1) {
+                scrollOffset += lineHeight;
+                console.log('Jumped forward one line');
+            }
+        }
+        
+        function jumpToPreviousLine() {
+            const lineHeight = 60;
+            const currentScrollLine = Math.floor((scrollOffset - initialScrollOffset) / lineHeight);
+            
+            if (currentScrollLine > 0) {
+                scrollOffset -= lineHeight;
+                console.log('Jumped back one line');
+            }
+        }
+        
+        function showPlaybackPrompt(action) {
+            const message = `Use ${action} controls in Total Recorder or Audition`;
+            console.log(`🎵 ${message}`);
+            playBeep(800, 200, 0.15);
+        }
+        
+        // Utility functions
+        function rgbToString(rgb) {
+            return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+        }
+        
+        // Button drawing functions
+        function drawButton(rect, text, isHovered, isPressed, color, textColor) {
+            let buttonColor = color || [0, 102, 204];
+            if (isPressed) {
+                buttonColor = [0, 80, 160];
+            } else if (isHovered) {
+                buttonColor = [0, 128, 255];
+            }
+            
+            ctx.fillStyle = rgbToString(buttonColor);
+            ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+            
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+            
+            ctx.fillStyle = rgbToString(textColor || [255, 255, 255]);
+            ctx.font = 'bold 24px "Courier New"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, rect.x + rect.width/2, rect.y + rect.height/2);
+        }
+        
+        function isPointInRect(point, rect) {
+            return point.x >= rect.x && point.x <= rect.x + rect.width &&
+                   point.y >= rect.y && point.y <= rect.y + rect.height;
+        }
+        
+        // Speed slider functions
+        function drawSpeedSlider(rect, currentIndex, labelText) {
+            const knobRadius = 10;
+            
+            ctx.fillStyle = 'rgb(100, 100, 100)';
+            ctx.fillRect(rect.x, rect.y + rect.height/2 - 2, rect.width, 4);
+            
+            for (let i = 0; i < speedValues.length; i++) {
+                const markerX = rect.x + (i / (speedValues.length - 1)) * rect.width;
+                ctx.fillStyle = 'rgb(150, 150, 150)';
+                ctx.beginPath();
+                ctx.arc(markerX, rect.y + rect.height/2, 3, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            
+            const knobX = rect.x + (currentIndex / (speedValues.length - 1)) * rect.width;
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(knobX, rect.y + rect.height/2, knobRadius, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.fillStyle = 'rgb(0, 102, 204)';
+            ctx.beginPath();
+            ctx.arc(knobX, rect.y + rect.height/2, knobRadius - 2, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            const currentLabel = speedLabels[currentIndex];
+            ctx.fillStyle = 'white';
+            ctx.font = '18px "Courier New"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const label = labelText || "Speed";
+            ctx.fillText(`${label}: ${currentLabel}`, rect.x + rect.width/2, rect.y - 15);
+        }
+        
+        function handleSpeedSliderClick(rect, pos) {
+            if (!isPointInRect(pos, rect)) {
+                return false;
+            }
+            
+            const relativeX = pos.x - rect.x;
+            const progress = Math.max(0, Math.min(1, relativeX / rect.width));
+            const newIndex = Math.round(progress * (speedValues.length - 1));
+            
+            if (newIndex !== speedCurrentIndex) {
+                speedCurrentIndex = newIndex;
+                return true;
+            }
+            return false;
+        }
+        
+        // Coordinate scaling functions
+        function scaleButtonCoordinates(originalCoords, originalImageSize, scaledImageSize) {
+            const scaleX = scaledImageSize.width / originalImageSize.width;
+            const scaleY = scaledImageSize.height / originalImageSize.height;
+            
+            return originalCoords.map(function(coord) {
+                return [
+                    Math.floor(coord[0] * scaleX),
+                    Math.floor(coord[1] * scaleY)
+                ];
+            });
+        }
+        
+        function offsetCoordinates(coords, offsetX, offsetY) {
+            return coords.map(function(coord) {
+                return [coord[0] + offsetX, coord[1] + offsetY];
+            });
+        }
+        
+        function drawButtonOutline(coords, color, width) {
+            if (coords.length < 3) {
+                return;
+            }
+            
+            ctx.strokeStyle = rgbToString(color || [0, 255, 0]);
+            ctx.lineWidth = width || 2;
+            ctx.beginPath();
+            ctx.moveTo(coords[0][0], coords[0][1]);
+            for (let i = 1; i < coords.length; i++) {
+                ctx.lineTo(coords[i][0], coords[i][1]);
+            }
+            ctx.closePath();
+            ctx.stroke();
+        }
+        
+        function drawFilledPolygon(coords, color) {
+            if (coords.length < 3) {
+                return;
+            }
+            
+            ctx.fillStyle = rgbToString(color);
+            ctx.beginPath();
+            ctx.moveTo(coords[0][0], coords[0][1]);
+            for (let i = 1; i < coords.length; i++) {
+                ctx.lineTo(coords[i][0], coords[i][1]);
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        // Point in polygon function
+        function pointInPolygon(point, polygon) {
+            const x = point.x, y = point.y;
+            let inside = false;
+            
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const xi = polygon[i][0], yi = polygon[i][1];
+                const xj = polygon[j][0], yj = polygon[j][1];
+                
+                if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+                    inside = !inside;
+                }
+            }
+            
+            return inside;
+        }
+        
+        function checkButtonClick(pos, buttonCoords) {
+            for (const buttonName in buttonCoords) {
+                if (pointInPolygon(pos, buttonCoords[buttonName])) {
+                    return buttonName;
+                }
+            }
+            return null;
+        }
+        
+        // Load actual images from files
+        function initializeImages() {
+            backgroundImage = new Image();
+            backgroundImage.onload = function() {
+                console.log('Background loaded');
+            };
+            backgroundImage.onerror = function() {
+                console.log('Background.jpg failed, trying .jpeg');
+                const bgImg2 = new Image();
+                bgImg2.onload = function() {
+                    backgroundImage = bgImg2;
+                    console.log('Background loaded as .jpeg');
+                };
+                bgImg2.onerror = function() {
+                    console.log('Both background formats failed, using default');
+                    createDefaultBackground();
+                };
+                bgImg2.src = 'background.jpeg';
+            };
+            backgroundImage.src = 'background.jpg';
+            
+            magTapeImage = new Image();
+            magTapeImage.onload = function() {
+                console.log('Mag tape loaded');
+            };
+            magTapeImage.onerror = function() {
+                console.log('Mag tape failed to load, using default');
+                createDefaultTape();
+            };
+            magTapeImage.src = 'magtape.jpg';
+            
+            controlsImage = new Image();
+            controlsImage.onload = function() {
+                console.log('Controls loaded');
+                calculateControlsSize();
+                scaleButtonCoords();
+            };
+            controlsImage.onerror = function() {
+                console.log('Controls failed to load, using default');
+                createDefaultControls();
+            };
+            controlsImage.src = 'controls.jpg';
+        }
+        
+        function createDefaultBackground() {
+            const bgCanvas = document.createElement('canvas');
+            bgCanvas.width = SCREEN_WIDTH;
+            bgCanvas.height = SCREEN_HEIGHT;
+            const bgCtx = bgCanvas.getContext('2d');
+            
+            const gradient = bgCtx.createLinearGradient(0, 0, 0, SCREEN_HEIGHT);
+            gradient.addColorStop(0, '#1a1a2e');
+            gradient.addColorStop(0.5, '#16213e');
+            gradient.addColorStop(1, '#0f3460');
+            bgCtx.fillStyle = gradient;
+            bgCtx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+            
+            backgroundImage = new Image();
+            backgroundImage.src = bgCanvas.toDataURL();
+        }
+        
+        function createDefaultTape() {
+            const tapeCanvas = document.createElement('canvas');
+            const tapeHeight = Math.floor(SCREEN_HEIGHT / 8);
+            tapeCanvas.width = SCREEN_WIDTH;
+            tapeCanvas.height = tapeHeight;
+            const tapeCtx = tapeCanvas.getContext('2d');
+            
+            const tapeGradient = tapeCtx.createLinearGradient(0, 0, 0, tapeHeight);
+            tapeGradient.addColorStop(0, '#c0c0c0');
+            tapeGradient.addColorStop(0.5, '#808080');
+            tapeGradient.addColorStop(1, '#404040');
+            tapeCtx.fillStyle = tapeGradient;
+            tapeCtx.fillRect(0, 0, SCREEN_WIDTH, tapeHeight);
+            
+            magTapeImage = new Image();
+            magTapeImage.src = tapeCanvas.toDataURL();
+        }
+        
+        function createDefaultControls() {
+            calculateControlsSize();
+            const controlsCanvas = document.createElement('canvas');
+            controlsCanvas.width = controlsWidth;
+            controlsCanvas.height = controlsHeight;
+            const controlsCtx = controlsCanvas.getContext('2d');
+            
+            const controlsGradient = controlsCtx.createLinearGradient(0, 0, controlsWidth, controlsHeight);
+            controlsGradient.addColorStop(0, '#8b4513');
+            controlsGradient.addColorStop(0.5, '#654321');
+            controlsGradient.addColorStop(1, '#4a2c2a');
+            controlsCtx.fillStyle = controlsGradient;
+            controlsCtx.fillRect(0, 0, controlsWidth, controlsHeight);
+            
+            controlsCtx.strokeStyle = '#3a1f1a';
+            controlsCtx.lineWidth = 2;
+            for (let y = 20; y < controlsHeight; y += 40) {
+                controlsCtx.beginPath();
+                controlsCtx.moveTo(0, y);
+                controlsCtx.lineTo(controlsWidth, y);
+                controlsCtx.stroke();
+            }
+            
+            controlsImage = new Image();
+            controlsImage.src = controlsCanvas.toDataURL();
+            scaleButtonCoords();
+        }
+        
+        function scaleButtonCoords() {
+            scaledButtonCoords = {};
+            if (controlsImage && controlsImageSize.width > 0) {
+                for (const buttonName in buttonCoordsOriginal) {
+                    const coords = buttonCoordsOriginal[buttonName];
+                    const scaledCoords = scaleButtonCoordinates(coords, ORIGINAL_CONTROLS_SIZE, controlsImageSize);
+                    const finalCoords = offsetCoordinates(scaledCoords, controlsX, controlsY);
+                    scaledButtonCoords[buttonName] = finalCoords;
+                }
+            }
+        }
+        
+        // Main drawing function
+        function draw() {
+            ctx.fillStyle = 'rgb(30, 30, 30)';
+            ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+            
+            if (backgroundImage && backgroundImage.complete) {
+                ctx.drawImage(backgroundImage, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+            }
+            
+            if (magTapeImage && magTapeImage.complete) {
+                const tapeHeight = Math.floor(SCREEN_HEIGHT / 8);
+                ctx.drawImage(magTapeImage, 0, 0, SCREEN_WIDTH, tapeHeight);
+                
+                const indicatorWidth = 8;
+                // Calculate dynamic position based on current progress through poem
+                const totalLines = HIGH_FLIGHT_LINES.filter(l => l.trim()).length;
+                const progress = currentPoemLine / totalLines;
+                const positionX = 50 + (progress * (SCREEN_WIDTH - 100));
+                const indicatorHeight = tapeHeight / 2;
+                const indicatorY = tapeHeight / 4;
+                
+                const rectX = positionX - indicatorWidth / 2;
+                ctx.fillStyle = 'rgb(0, 255, 0)';
+                ctx.fillRect(rectX, indicatorY, indicatorWidth, indicatorHeight);
+                
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(rectX + indicatorWidth/2, indicatorY + indicatorHeight/2, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            
+            if (controlsImage && controlsImage.complete) {
+                ctx.drawImage(controlsImage, controlsX, controlsY, controlsWidth, controlsHeight);
+                
+                // Show current line number as 3-digit counter on controls
+                const lineNumber = String(currentPoemLine).padStart(3, '0');
+                ctx.fillStyle = 'rgb(0, 255, 0)';
+                ctx.font = 'bold 24px "Courier New"';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                ctx.fillText(lineNumber, controlsX + 50, controlsY + 20);
+                
+                for (const buttonName in scaledButtonCoords) {
+                    const coords = scaledButtonCoords[buttonName];
+                    if (buttonName === "playback_mode") {
+                        let color;
+                        if (playbackMode === "normal") {
+                            color = [0, 180, 0];
+                        } else if (playbackMode === "playback_idle") {
+                            color = [200, 200, 0];
+                        } else {
+                            color = [200, 0, 0];
+                        }
+                        
+                        drawFilledPolygon(coords, color);
+                        drawButtonOutline(coords, [101, 67, 33], 4);
+                        
+                    } else {
+                        let color;
+                        let width = 3;
+                        
+                        if (buttonName === "forward") {
+                            color = [0, 255, 0];
+                        } else if (buttonName === "pause") {
+                            color = [255, 255, 0];
+                        } else if (buttonName === "stop_eject") {
+                            color = [255, 0, 0];
+                        } else if (buttonName === "fast_rewind") {
+                            color = [0, 150, 255];
+                        } else if (buttonName === "fast_forward") {
+                            color = [0, 150, 255];
+                        } else if (buttonName === "record") {
+                            if (playbackMode !== "normal") {
+                                color = [100, 100, 100];
+                            } else {
+                                color = totalRecorderMode ? [255, 50, 50] : [0, 255, 0];
+                                width = totalRecorderMode ? 5 : 3;
+                            }
+                        } else {
+                            color = [255, 255, 255];
+                        }
+                        
+                        drawButtonOutline(coords, color, width);
+                    }
+                }
+            }
+            
+            // Draw title with nice green color
+            ctx.fillStyle = 'rgb(50, 255, 150)';
+            ctx.font = 'bold 40px "Courier New"';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText("High Flight - by John Gillespie Magee Jr.", 50, POSITION_TITLE);
+            
+            // Measure all poem lines for window sizing
+            ctx.font = '48px Arial';
+            let maxWidth = 0;
+            let maxHeight = 0;
+            
+            for (let i = 0; i < HIGH_FLIGHT_LINES.length; i++) {
+                const line = HIGH_FLIGHT_LINES[i];
+                if (line.trim()) {
+                    const metrics = ctx.measureText(line);
+                    maxWidth = Math.max(maxWidth, metrics.width);
+                    maxHeight = Math.max(maxHeight, 48);
+                }
+            }
+            
+            // Define lineHeight before using it
+            const lineHeight = 60;
+            
+            // Calculate initial scroll offset to center first line in reading box
+            const windowWidth = Math.floor(maxWidth * 1.15);
+            const windowHeight = Math.floor(maxHeight * 1.15);
+            const windowX = (SCREEN_WIDTH - windowWidth) / 2;
+            const windowY = (SCREEN_HEIGHT - windowHeight) / 2;
+            
+            // Calculate where first line should start (center of reading box)
+            const readingBoxCenter = windowY + windowHeight / 2;
+            const baseStartY = windowY + windowHeight + (lineHeight / 2);
+            initialScrollOffset = baseStartY - readingBoxCenter;
+            
+            // If this is the first frame, set scrollOffset to initial position
+            if (scrollOffset === 0 && waitingForStart) {
+                scrollOffset = initialScrollOffset;
+            }
+            
+            // Draw blue window frame
+            ctx.strokeStyle = 'rgb(100, 100, 255)';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(windowX, windowY, windowWidth, windowHeight);
+            
+            // Display poem text with smooth scrolling
+            const startY = baseStartY - scrollOffset;
+            
+            ctx.fillStyle = 'white';
+            ctx.font = '48px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            
+            for (let i = 0; i < HIGH_FLIGHT_LINES.length; i++) {
+                const line = HIGH_FLIGHT_LINES[i];
+                if (line.trim()) {
+                    const lineY = startY + i * lineHeight;
+                    if (lineY > -lineHeight && lineY < SCREEN_HEIGHT) {
+                        ctx.fillText(line, SCREEN_WIDTH / 2, lineY);
+                    }
+                }
+            }
+            
+            // Draw the iambic pentameter meter bar
+            drawMeterBar();
+            
+            // Show Total Recorder coordination status
+            if (totalRecorderMode) {
+                ctx.fillStyle = 'rgb(255, 50, 50)';
+                ctx.font = 'bold 36px "Courier New"';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                ctx.fillText("● TOTAL RECORDER ACTIVE", SCREEN_WIDTH - 450, 40);
+                
+                const flashTime = Date.now() % 1000;
+                if (flashTime < 500) {
+                    ctx.fillStyle = 'rgba(255, 50, 50, 0.3)';
+                    ctx.fillRect(SCREEN_WIDTH - 480, 30, 460, 50);
+                }
+            } else {
+                ctx.fillStyle = 'rgb(100, 255, 100)';
+                ctx.font = 'bold 24px "Courier New"';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                ctx.fillText("Total Recorder Ready", SCREEN_WIDTH - 250, 50);
+            }
+            
+            // Show playback mode status
+            if (playbackMode !== "normal") {
+                const modeText = playbackMode === "playback_idle" ? "PLAYBACK IDLE" : "PLAYBACK ACTIVE";
+                const modeColor = playbackMode === "playback_idle" ? 'rgb(255, 255, 0)' : 'rgb(255, 100, 100)';
+                ctx.fillStyle = modeColor;
+                ctx.font = 'bold 20px "Courier New"';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                ctx.fillText(modeText, SCREEN_WIDTH - 200, 100);
+            }
+            
+            // Draw UI buttons
+            const playText = (!waitingForStart && !songPaused) ? "Pause" : "Play";
+            drawButton(playPauseRect, playText, playPauseHovered, false);
+            drawButton(restartRect, "Restart", restartHovered, false);
+            drawButton(meterToggleRect, meterBarEnabled ? "Meter: ON" : "Meter: OFF", false, false, 
+                      meterBarEnabled ? [0, 150, 0] : [150, 150, 150]);
+            
+            // Draw speed slider
+            drawSpeedSlider(speedRect, speedCurrentIndex);
+            
+            // Draw abbreviated help text at bottom right - wrapped for readability
+            const helpStartY = SCREEN_HEIGHT - 270;
+            const helpStartX = SCREEN_WIDTH - 280;
+            const helpLines = [
+                "Space=Play R=Restart", 
+                "Q=Quit M=Meter B=Breath",
+                "REC: 3↑Start 2↓Stop", 
+                "PLAY: 2Hi=Start 1Lo=Stop",
+                "FF/FR: Line jump (or prompt)"
+            ];
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(helpStartX - 10, helpStartY - 10, 270, 140);
+            
+            ctx.fillStyle = 'white';
+            ctx.font = '16px "Courier New"';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            
+            for (let i = 0; i < helpLines.length; i++) {
+                ctx.fillText(helpLines[i], helpStartX, helpStartY + i * 20);
+            }
+
+            // Show large coordination message during recording or playback
+            if (totalRecorderMode || playbackMode === "playback_active") {
+                const messageY = SCREEN_HEIGHT - 100;
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, messageY - 30, SCREEN_WIDTH, 60);
+                
+                let messageText = "";
+                let messageColor = "";
+                
+                if (totalRecorderMode) {
+                    messageText = "🎙️ COORDINATING WITH TOTAL RECORDER - LISTEN FOR BEEP SIGNALS";
+                    messageColor = 'rgb(255, 255, 50)';
+                } else if (playbackMode === "playback_active") {
+                    messageText = "🎵 COORDINATING WITH AUDITION PLAYBACK - LISTEN FOR BEEP SIGNALS";
+                    messageColor = 'rgb(50, 255, 255)';
+                }
+                
+                ctx.fillStyle = messageColor;
+                ctx.font = 'bold 32px "Courier New"';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(messageText, SCREEN_WIDTH / 2, messageY);
+            }
+        }
+        
+        // Update function
+        function update() {
+            const currentTime = Date.now();
+            
+            if (playbackMode === "normal") {
+                if (!waitingForStart && !songPaused) {
+                    const dt = (currentTime - lastTime) / 1000;
+                    const currentSpeed = baseScrollSpeed * speedValues[speedCurrentIndex];
+                    scrollOffset += currentSpeed * dt;
+                }
+            } else {
+                if (playbackMode === "playback_active") {
+                    if (!waitingForStart && !songPaused) {
+                        const dt = (currentTime - lastTime) / 1000;
+                        const currentSpeed = baseScrollSpeed * speedValues[speedCurrentIndex];
+                        scrollOffset += currentSpeed * dt;
+                    }
+                }
+            }
+            
+            // Calculate current poem line for display
+            const lineHeight = 60;
+            const windowHeight = 55;
+            const windowY = (SCREEN_HEIGHT - windowHeight) / 2;
+            const readingBoxCenter = windowY + windowHeight / 2;
+            const baseStartY = windowY + windowHeight + (lineHeight / 2);
+            const startY = baseStartY - scrollOffset;
+            const readingBoxCenterY = windowY + windowHeight / 2;
+            
+            let newCurrentPoemLine = 1;
+            let minDistance = Infinity;
+            
+            for (let i = 0; i < HIGH_FLIGHT_LINES.length; i++) {
+                const line = HIGH_FLIGHT_LINES[i];
+                if (line.trim()) {
+                    const lineY = startY + i * lineHeight;
+                    const lineCenterY = lineY + lineHeight / 2;
+                    const distance = Math.abs(lineCenterY - readingBoxCenterY);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        newCurrentPoemLine = i + 1;
+                    }
+                }
+            }
+            
+            currentPoemLine = newCurrentPoemLine;
+            lastTime = currentTime;
+        }
+        
+        // Event handlers
+        function getTouchPos(event) {
+            const rect = canvas.getBoundingClientRect();
+            const touch = event.touches[0] || event.changedTouches[0];
+            return {
+                x: (touch.clientX - rect.left) * (SCREEN_WIDTH / rect.width),
+                y: (touch.clientY - rect.top) * (SCREEN_HEIGHT / rect.height)
+            };
+        }
+        
+        function getMousePos(event) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (event.clientX - rect.left) * (SCREEN_WIDTH / rect.width),
+                y: (event.clientY - rect.top) * (SCREEN_HEIGHT / rect.height)
+            };
+        }
+        
+        function handleKeyDown(event) {
+            if (!applicationRunning) {
+                return;
+            }
+            
+            switch (event.code) {
+                case 'Escape':
+                case 'KeyQ':
+                    quitApplication();
+                    break;
+                    
+                case 'Space':
+                    event.preventDefault();
+                    if (waitingForStart) {
+                        waitingForStart = false;
+                        meterStartTime = Date.now(); // Start meter timing
+                    } else if (songPaused) {
+                        songPaused = false;
+                    } else {
+                        songPaused = true;
+                    }
+                    break;
+                    
+                case 'KeyR':
+                    currentLine = 0;
+                    waitingForStart = true;
+                    songPaused = false;
+                    scrollOffset = 0.0; // Will be reset to initial position in draw()
+                    meterStartTime = 0; // Reset meter timing
+                    break;
+                    
+                case 'KeyM':
+                    meterBarEnabled = !meterBarEnabled;
+                    console.log('Meter bar:', meterBarEnabled ? 'ON' : 'OFF');
+                    break;
+					
+                case 'KeyB':
+                    if (meterBarEnabled && !waitingForStart && window.currentBeat === 4 && !breathingPauseAdded) {
+                        breathingPauseAdded = true;
+                        console.log('Breathing pause added to current line');
+                    }
+                    break;
+            }
+        }
+        
+        function handleMouseMove(event) {
+            const mousePos = getMousePos(event);
+            updateHoverStates(mousePos);
+        }
+        
+        function handleTouchMove(event) {
+            event.preventDefault();
+            const touchPos = getTouchPos(event);
+            updateHoverStates(touchPos);
+        }
+        
+        function updateHoverStates(pos) {
+            playPauseHovered = isPointInRect(pos, playPauseRect);
+            restartHovered = isPointInRect(pos, restartRect);
+        }
+        
+        function handleMouseDown(event) {
+            const mousePos = getMousePos(event);
+            handlePointerDown(mousePos);
+        }
+        
+        function handleTouchStart(event) {
+            event.preventDefault();
+            const touchPos = getTouchPos(event);
+            handlePointerDown(touchPos);
+        }
+        
+        function handlePointerDown(pos) {
+            if (!applicationRunning) {
+                return;
+            }
+            
+            if (navigator.vibrate) {
+                navigator.vibrate(50);
+            }
+            
+            if (isPointInRect(pos, playPauseRect)) {
+                if (waitingForStart) {
+                    waitingForStart = false;
+                    meterStartTime = Date.now(); // Start meter timing
+                } else if (songPaused) {
+                    songPaused = false;
+                } else {
+                    songPaused = true;
+                }
+                return;
+            }
+            
+            if (isPointInRect(pos, restartRect)) {
+                currentLine = 0;
+                waitingForStart = true;
+                songPaused = false;
+                scrollOffset = 0.0; // Will be reset to initial position in draw()
+                meterStartTime = 0; // Reset meter timing
+                return;
+            }
+            
+            if (isPointInRect(pos, meterToggleRect)) {
+                meterBarEnabled = !meterBarEnabled;
+                console.log('Meter bar:', meterBarEnabled ? 'ON' : 'OFF');
+                return;
+            }
+            
+            if (handleSpeedSliderClick(speedRect, pos)) {
+                return;
+            }
+            
+            if (Object.keys(scaledButtonCoords).length > 0) {
+                const clickedButton = checkButtonClick(pos, scaledButtonCoords);
+                if (clickedButton) {
+                    console.log(`Button clicked: ${clickedButton}`);
+                    
+                    switch (clickedButton) {
+                        case "playback_mode":
+                            if (totalRecorderMode) {
+                                console.log("🚫 Cannot change to playback mode while recording");
+                                playBeep(200, 200, 0.2);
+                                break;
+                            }
+                            
+                            if (playbackMode === "normal") {
+                                playbackMode = "playback_idle";
+                                console.log("Switched to playback mode (idle) - Ready for Audition");
+                            } else if (playbackMode === "playback_idle") {
+                                playbackMode = "playback_active";
+                                startAuditionPlayback();
+                                console.log("Started audio playback coordination");
+                            } else {
+                                playbackMode = "normal";
+                                stopAuditionPlayback();
+                                console.log("Stopped playback, returned to normal mode");
+                            }
+                            break;
+                            
+                        case "forward":
+                            if (playbackMode === "normal") {
+                                if (waitingForStart) {
+                                    waitingForStart = false;
+                                    meterStartTime = Date.now(); // Start meter timing
+                                } else if (songPaused) {
+                                    songPaused = false;
+                                } else {
+                                    songPaused = true;
+                                }
+                            } else {
+                                if (totalRecorderMode) {
+                                    console.log("🚫 Cannot control playback while recording");
+                                    playBeep(200, 200, 0.2);
+                                    break;
+                                }
+                                
+                                if (playbackMode === "playback_idle") {
+                                    playbackMode = "playback_active";
+                                    startAuditionPlayback();
+                                    console.log("Started audio playback coordination");
+                                } else if (playbackMode === "playback_active") {
+                                    playbackMode = "playback_idle";
+                                    stopAuditionPlayback();
+                                    console.log("Paused audio playback coordination");
+                                }
+                            }
+                            break;
+                            
+                        case "fast_forward":
+                            if (playbackMode === "normal") {
+                                jumpToNextLine();
+                            } else {
+                                showPlaybackPrompt("fast forward");
+                            }
+                            break;
+                            
+                        case "fast_rewind":
+                            if (playbackMode === "normal") {
+                                jumpToPreviousLine();
+                            } else {
+                                showPlaybackPrompt("rewind");
+                            }
+                            break;
+                            
+                        case "pause":
+                            if (playbackMode === "normal") {
+                                if (!waitingForStart) {
+                                    songPaused = !songPaused;
+                                }
+                            } else {
+                                if (totalRecorderMode) {
+                                    console.log("🚫 Cannot control playback while recording");
+                                    playBeep(200, 200, 0.2);
+                                    break;
+                                }
+                                
+                                if (playbackMode === "playback_active") {
+                                    playbackMode = "playback_idle";
+                                    stopAuditionPlayback();
+                                    console.log("Paused audio playback coordination");
+                                }
+                            }
+                            break;
+                            
+                        case "stop_eject":
+                            if (playbackMode !== "normal") {
+                                if (totalRecorderMode) {
+                                    console.log("🚫 Cannot stop playback while recording");
+                                    playBeep(200, 200, 0.2);
+                                    break;
+                                }
+                                
+                                if (playbackMode === "playback_active") {
+                                    stopAuditionPlayback();
+                                }
+                                playbackMode = "playback_idle";
+                                console.log("Stopped audio playback coordination");
+                            }
+                            currentLine = 0;
+                            waitingForStart = true;
+                            songPaused = false;
+                            scrollOffset = 0.0; // Will be reset to initial position in draw()
+                            meterStartTime = 0; // Reset meter timing
+                            break;
+                            
+                        case "record":
+                            if (playbackMode === "normal") {
+                                if (!totalRecorderMode) {
+                                    showRecordingInstructions();
+                                } else {
+                                    toggleTotalRecorderCoordination();
+                                }
+                            } else {
+                                console.log("Recording disabled during playback mode");
+                            }
+                            break;
+                    }
+                }
+            }
+        }
+        
+        // Animation loop
+        function gameLoop() {
+            if (!applicationRunning) {
+                return;
+            }
+            
+            update();
+            draw();
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+        
+        // Initialize and start
+        function init() {
+            initializeImages();
+            calculateControlsSize();
+            
+            document.addEventListener('keydown', handleKeyDown);
+            
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mousedown', handleMouseDown);
+            
+            canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+            canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+            canvas.addEventListener('touchend', function(e) { e.preventDefault(); }, { passive: false });
+            
+            canvas.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+            
+            document.addEventListener('touchstart', function(e) {
+                if (e.target === canvas) e.preventDefault();
+            }, { passive: false });
+            
+            document.addEventListener('touchmove', function(e) {
+                if (e.target === canvas) e.preventDefault();
+            }, { passive: false });
+            
+            document.addEventListener('touchend', function(e) {
+                if (e.target === canvas) e.preventDefault();
+            }, { passive: false });
+            
+            window.addEventListener('resize', function() {
+                canvasScale = setupCanvas();
+                calculateControlsSize();
+                scaleButtonCoords();
+            });
+            
+            window.addEventListener('orientationchange', function() {
+                setTimeout(function() {
+                    canvasScale = setupCanvas();
+                    calculateControlsSize();
+                    scaleButtonCoords();
+                }, 100);
+            });
+            
+            gameLoop();
+            
+            console.log('High Flight Teleprompter initialized - WITH IAMBIC PENTAMETER BAR');
+            console.log('🎙️ Total Recorder Integration Ready');
+            console.log('🎵 Audition Playback Coordination Ready');
+            console.log('📏 Iambic Pentameter Meter Bar Ready');
+            console.log('Click Record button to coordinate with Total Recorder');
+            console.log('Click Playback Mode button to coordinate with Audition');
+            console.log('Press M or click Meter button to toggle meter bar');
+            console.log('Press B during beat 5 to add breathing pause');
+            console.log('FF/FR buttons: Line jump in normal mode, prompt in playback mode');
+            console.log('BEEP PATTERNS:');
+            console.log('  Record: 3 ascending = START, 2 descending = STOP');
+            console.log('  Playback: 2 quick high = START, 1 long low = STOP');
+        }
+        
+        window.addEventListener('load', init);
+        
+        window.addEventListener('beforeunload', function() {
+            if (totalRecorderMode) {
+                stopTotalRecorderCoordination();
+            }
+        });
+    </script>
+</body>
+</html>
