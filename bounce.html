@@ -142,6 +142,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
         <option value="">Select Song...</option>
         <option value="rainbow">Rainbow Connection</option>
         <option value="dylan">Don't Think Twice, It's All Right</option>
+        <option value="The Visitor">The Visitor</option>
     </select>
     <div id="loadingStatus">Select a song to begin...</div>
     <button id="playButton">▶ PLAY</button>
@@ -468,14 +469,164 @@ C          G            Am        F                         LL 42
 [Chorus]
 C           G7              C      C                        LL 43
 (Harmonica break)                                           LL 43
-1           3               5      7    ZZZ                 LL 43`
-        };
+1           3               5      7    ZZZ                 LL 43
+`
+,
+            "The Visitor": `The Visitor by Chris Sullivan
+4/4
+
+[Verse 1]
+        G          D7       G       G7
+Well he might’ve arrived by courier 
+        1          3        5       7           ZZZ         LL 01
+[Verse 1]
+       C              D7          G       G7
+It’s unlikely that he came up the stairs
+       1              3           5       7     ZZZ         LL 02
+[Verse 1]
+   C                D7 Em 
+He prob’ly took the elevator 
+   1                3  5                        ZZZ         LL 03
+[Verse 1]
+       Am                D7
+No one knows, and nobody cares
+       1          3      5                      ZZZ         LL 04
+[Chorus]
+          G              D7        G       G7 
+There’s a cricket on the twentieth floor 
+          1              3         5       7    ZZZ         LL 05
+[Chorus]
+        C        D7     G            G7
+You can hear him in the men’s room
+        1        3      5            7          ZZZ         LL 06
+[Chorus]
+     C         D7       Bm    Em 
+It’s not about peace or war 
+     1         3        5     7                 ZZZ         LL 08
+[Chorus]
+          Am             D7        G
+There’s a cricket on the twentieth floor
+          1              3         5            ZZZ         LL 09
+[Verse 2]
+   G           D7      G       G7
+He started his legs to singin 
+   1           3       5       7                ZZZ         LL 10
+[Verse 2]
+       C                D7      G         G7
+Didn’t know that it was far too late now
+       1                3       5         7     ZZZ         LL 11
+[Verse 2]
+         C       D7     Em 
+When the heating season came 
+         1       3      5                       ZZZ         LL 12
+[Verse 2]
+   Am                     D7
+He figured it was time to mate now
+   1              3       5                     ZZZ         LL 13
+[Chorus]
+          G              D7        G       G7 
+There’s a cricket on the twentieth floor 
+          1              3         5       7    ZZZ         LL 14
+[Chorus]
+        C        D7     G            G7
+You can hear him in the men’s room
+        1        3      5            7          ZZZ         LL 15
+[Chorus]
+     C         D7       Bm    Em 
+It’s not about peace or war 
+     1         3        5     7                 ZZZ         LL 16
+[Chorus]
+          Am             D7        G 
+There’s a cricket on the twentieth floor
+          1              3         5            ZZZ         LL 17
+[Verse 3]
+   G                   D7      G        G7
+He thinks she’s playin hard to get 
+   1                   3       5        7       ZZZ         LL 18
+[Verse 3]
+        C               D7        G       G7
+And the next chirp will bring her hoppin’
+   1               3              5       7     ZZZ         LL 19
+[Verse 3]
+          C          D7       Em
+But she’s twenty one floors below 
+          1          3        5                 ZZZ         LL 20
+[Verse 3]
+          Am              D7
+Where the people do their shoppin’
+          1      3        5                     ZZZ         LL 21
+[Bridge]
+       Bm               Em
+Out of place and out of time 
+       1         3      5                       ZZZ         LL 22
+[Bridge]
+       Bm                   Em
+Out of sight and out of his mind
+       1         3          5                   ZZZ         LL 23
+[Bridge]
+       C        D7          Bm       Em
+It’s a bit of a shame and a bit of a sin 
+       1        3           5        7          ZZZ         LL 24
+[Bridge]
+        Am                     D7
+Neither one of us knows what a scrape we’re in
+        1         3            5            7   ZZZ         LL 25
+[Chorus]
+          G              D7        G       G7 
+There’s a cricket on the twentieth floor 
+          1              3         5       7    ZZZ         LL 26
+[Chorus]
+        C        D7     G            G7
+You can hear him in the men’s room
+        1        3      5            7          ZZZ         LL 27
+[Chorus]
+     C         D7       Bm    Em 
+It’s not about peace or war 
+     1         3        5     7                 ZZZ         LL 28
+[Chorus]
+          Am             D7        G
+There’s a cricket on the twentieth floor
+          1              3         5            ZZZ         LL 29
+Verse 4]
+        G               D7          G       G7
+Haven’t heard him for a week now or more 
+        1               3           5       7   ZZZ         LL 30
+[Verse 4]
+      C         D7     G       G7
+Kinda wish that he had stayed
+      1         3      5       7                ZZZ         LL 31
+[Verse 4]
+          C            D7     Em
+Must have given up and gone before 
+          1            3      5                 ZZZ         LL 32
+[Verse 4]
+      Am                     D7
+Kinda miss that song that he played
+      1         3            5                  ZZZ         LL 33
+[Chorus]
+          G              D7        G       G7 
+There’s a cricket on the twentieth floor 
+          1              3         5       7    ZZZ         LL 36
+[Chorus]
+        C        D7     G            G7
+You can hear him in the men’s room
+        1        3      5            7          ZZZ         LL 37
+[Chorus]
+     C         D7       Bm    Em 
+It’s not about peace or war 
+     1         3        5     7                 ZZZ         LL 38
+[Chorus]
+          Am             D7        G
+There’s a cricket on the twentieth floor
+          1              3         5            ZZZ         LL 39
+`
+    };
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const playButton = document.getElementById('playButton');
         const restartButton = document.getElementById('restartButton');
-        const songSelector = document.getElementById('songSelector');
+        const songSelector = document.getElementById('songSelector');	
         const speedSlider = document.getElementById('speedSlider');
         const speedLabel = document.getElementById('speedLabel');
         const debugInfo = document.getElementById('debugInfo');
@@ -848,116 +999,178 @@ C           G7              C      C                        LL 43
             return line.substring(start, end).trim();
         }
         
-        // Syllable dictionary for word highlighting (from your Python version)
-        const SYLLABLE_DICT = {
-            "slipped": ["slipped"],
-            "surly": ["sur", "ly"], 
-            "bonds": ["bonds"],
-            "danced": ["danced"],
-            "skies": ["skies"],
-            "laughter": ["laugh", "ter"],
-            "silvered": ["sil", "verd"],
-            "wings": ["wings"],
-            "climbed": ["climbed"],
-            "joined": ["joined"],
-            "tumbling": ["tum", "bling"],
-            "mirth": ["mirth"],
-            "delirious": ["de", "lir", "i", "ous"],
-            "burning": ["burn", "ing"],
-            "footless": ["foot", "less"],
-            "halls": ["halls"],
-            "rainbow": ["rain", "bow"],
-            "rainbows": ["rain", "bows"],
-            "visions": ["vi", "sions"],
-            "illusions": ["il", "lu", "sions"],
-            "believe": ["be", "lieve"],
-            "believed": ["be", "lieved"],
-            "amazing": ["a", "maz", "ing"],
-            "connection": ["con", "nec", "tion"],
-            "dreamers": ["dream", "ers"],
-            "answered": ["an", "swered"],
-            "morning": ["morn", "ing"],
-            "stargazing": ["star", "gaz", "ing"],
-            "probably": ["prob", "ab", "ly"],
-            "voices": ["voic", "es"],
-            "calling": ["call", "ing"],
-            "sailors": ["sail", "ors"],
-            "ignore": ["ig", "nore"],
-            "supposed": ["sup", "posed"],
-            "something": ["some", "thing"],
-            "other": ["oth", "er"],
-            "under": ["un", "der"],
-            "magic": ["mag", "ic"],
-            "asleep": ["a", "sleep"],
-            "lovers": ["lov", "ers"],
-            "someday": ["some", "day"],
-            "only": ["on", "ly"],
-            "wonder": ["won", "der"],
-            "baby": ["ba", "by"],
-            "never": ["nev", "er"],
-            "somehow": ["some", "how"],
-            "rooster": ["roos", "ter"],
-            "window": ["win", "dow"],
-            "reason": ["rea", "son"],
-            "turnin": ["turn", "in"],
-            "turning": ["turn", "ing"],
-            "callin": ["call", "in"],
-            "calling": ["call", "ing"],
-            "thinkin": ["think", "in"],
-            "thinking": ["think", "ing"],
-            "wondrin": ["wond", "rin"],
-            "wondering": ["won", "der", "ing"],
-            "walking": ["walk", "ing"],
-            "woman": ["wom", "an"],
-            "wanted": ["want", "ed"],
-            "treated": ["treat", "ed"],
-            "better": ["bet", "ter"],
-            "precious": ["pre", "cious"],
-            "harmonica": ["har", "mon", "i", "ca"],
-            "honey": ["hon", "ey"],
-            "goodbye": ["good", "bye"],
-            "talkin": ["talk", "in"],
-            "talking": ["talk", "ing"],
-            "kinda": ["kind", "a"],
-            "wasted": ["wast", "ed"],
-            "travelin": ["trav", "el", "in"],
-            "anymore": ["an", "y", "more"], 
-            "farewell": ["fare", "well"],
-            "unkind": ["un", "kind"],
-            "anyway": ["an", "y", "way"],
-            "somethin": ["some", "thin"],
-            
-            // Contractions
-            "whats": ["what\'s"],
-            "dont": ["don\'t"], 
-            "wont": ["won\'t"],
-            "cant": ["can\'t"],
-            "im": ["I\'m"],
-            "youre": ["you\'re"],
-            "theyre": ["they\'re"],
-            "were": ["we\'re"],
-            "isnt": ["is", "n\'t"],
-            "arent": ["are", "n\'t"],
-            "wasnt": ["was", "n\'t"],
-            "werent": ["were", "n\'t"],
-            "havent": ["have", "n\'t"],
-            "hasnt": ["has", "n\'t"],
-            "hadnt": ["had", "n\'t"],
-            "wouldnt": ["would", "n\'t"],
-            "couldnt": ["could", "n\'t"],
-            "shouldnt": ["should", "n\'t"],
-            "ive": ["I\'ve"],
-            "youve": ["you\'ve"],
-            "weve": ["we\'ve"],
-            "theyve": ["they\'ve"],
-            "hes": ["he\'s"],
-            "shes": ["she\'s"],
-            "its": ["it\'s"],
-            "thats": ["that\'s"],
-            "heres": ["here\'s"],
-            "theres": ["there\'s"],
-            "wheres": ["where\'s"]
-        };
+		// ---------------------------
+		// SYLLABLE DICTIONARY
+		// ---------------------------
+
+		const SYLLABLE_DICT = {
+
+			// ---------------------------
+			// Don't Think Twice, It's All Right
+			// ---------------------------
+			"baby": ["baby"],
+			"before": ["be", "fore"],
+			"better": ["bet", "ter"],
+			"could": ["could"],
+			"done": ["done"],
+			"farewell": ["fare", "well"],
+			"goodbye": ["good", "bye"],
+			"honey": ["hon", "ey"],
+			"kind": ["kind"],
+			"mind": ["mind"],
+			"never": ["nev", "er"],
+			"precious": ["pre", "cious"],
+			"reason": ["rea", "son"],
+			"rooster": ["roos", "ter"],
+			"saying": ["say", "ing"],
+			"talking": ["talk", "ing"],
+			"think": ["think"],
+			"travelin": ["trav", "el", "in"],
+			"wasted": ["wast", "ed"],
+			"window": ["win", "dow"],
+			"woman": ["wom", "an"],
+			"wonder": ["won", "der"],
+			"wondrin": ["wond", "rin"],
+			"anymore": ["an", "y", "more"],
+			"anyway": ["an", "y", "way"],
+
+			// ---------------------------
+			// Rainbow Connection
+			// ---------------------------
+			"amazing": ["a", "maz", "ing"],
+			"answered": ["an", "swered"],
+			"asleep": ["a", "sleep"],
+			"believe": ["be", "lieve"],
+			"believed": ["be", "lieved"],
+			"connection": ["con", "nec", "tion"],
+			"dreamers": ["dream", "ers"],
+			"illusion": ["il", "lu", "sion"],
+			"illusions": ["il", "lu", "sions"],
+			"laughter": ["laugh", "ter"],
+			"lovers": ["lov", "ers"],
+			"magic": ["mag", "ic"],
+			"morning": ["morn", "ing"],
+			"probably": ["prob", "ab", "ly"],
+			"rainbow": ["rain", "bow"],
+			"rainbows": ["rain", "bows"],
+			"sailors": ["sail", "ors"],
+			"somebody": ["some", "bod", "y"],
+			"something": ["some", "thing"],
+			"someday": ["some", "day"],
+			"stargazing": ["star", "gaz", "ing"],
+			"supposed": ["sup", "posed"],
+			"visions": ["vi", "sions"],
+			"voices": ["voic", "es"],
+			"wonder": ["won", "der"],
+
+			// ---------------------------
+			// High Flight
+			// ---------------------------
+			"climbed": ["climbed"],
+			"delirious": ["de", "lir", "i", "ous"],
+			"danced": ["danced"],
+			"footless": ["foot", "less"],
+			"joined": ["joined"],
+			"laugh": ["laugh"],
+			"mirth": ["mirth"],
+			"silvered": ["sil", "verd"],
+			"skies": ["skies"],
+			"slipped": ["slipped"],
+			"surly": ["sur", "ly"],
+			"tumblin": ["tum", "blin"],
+			"wings": ["wings"],
+
+			// ---------------------------
+			// The Visitor
+			// ---------------------------
+			"arrived": ["ar", "rived"],
+			"courier": ["cour", "i", "er"],
+			"cricket": ["crick", "et"],
+			"elevator": ["el", "e", "va", "tor"],
+			"figured": ["fig", "ured"],
+			"hoppin": ["hop", "pin"],
+			"mate": ["mate"],
+			"miss": ["miss"],
+			"people": ["peo", "ple"],
+			"playin": ["play", "in"],
+			"probly": ["prob", "ly"],
+			"scrape": ["scrape"],
+			"singin": ["sing", "in"],
+			"twentieth": ["twen", "ti", "eth"],
+            "unlikely": ["un", "like", "ly"],
+
+			// ---------------------------
+			// CONTRACTIONS: Don't Think Twice, It's All Right
+			// ---------------------------
+			"ain't": ["ain't"],
+			"can't": ["can't"],
+			"could've": ["could've"],
+			"couldn't": ["couldn't"],
+			"didn't": ["didn't"],
+			"doesn't": ["doesn't"],
+			"don't": ["don't"],
+			"hadn't": ["hadn't"],
+			"hasn't": ["hasn't"],
+			"haven't": ["haven't"],
+			"he's": ["he's"],
+			"i'd": ["i'd"],
+			"i'll": ["i'll"],
+			"i'm": ["i'm"],
+			"i've": ["i've"],
+			"isn't": ["isn't"],
+			"it's": ["it's"],
+			"let's": ["let's"],
+			"she's": ["she's"],
+			"shouldn't": ["shouldn't"],
+			"that's": ["that's"],
+			"there's": ["there's"],
+			"they'll": ["they'll"],
+			"they're": ["they're"],
+			"they've": ["they've"],
+			"wasn't": ["wasn't"],
+			"we're": ["we're"],
+			"weren't": ["weren't"],
+			"what's": ["what's"],
+			"where's": ["where's"],
+			"who's": ["who's"],
+			"won't": ["won't"],
+			"wouldn't": ["wouldn't"],
+			"you'd": ["you'd"],
+			"you'll": ["you'll"],
+			"you're": ["you're"],
+			"you've": ["you've"],
+
+			// ---------------------------
+			// CONTRACTIONS: Rainbow Connection
+			// ---------------------------
+			"what's": ["what's"],
+			"it's": ["it's"],
+			"didn't": ["didn't"],
+			"doesn't": ["doesn't"],
+			"there's": ["there's"],
+			"we've": ["we've"],
+			"he's": ["he's"],
+			"you're": ["you're"],
+
+			// ---------------------------
+			// CONTRACTIONS: High Flight
+			// ---------------------------
+			// (None commonly found; add if needed)
+
+			// ---------------------------
+			// CONTRACTIONS: The Visitor
+			// ---------------------------
+			"he'd": ["he'd"],
+			"he's": ["he's"],
+			"she's": ["she's"],
+			"it's": ["it's"],
+			"didn't": ["didn't"],
+			"can't": ["can't"],
+			"doesn't": ["doesn't"],
+			"there's": ["there's"],
+			"we're": ["we're"],
+			"you're": ["you're"]
+		};
         
         function extractSyllableAtPosition(line, charIndex) {
             // Extract the specific syllable that the beat position points to
@@ -974,51 +1187,51 @@ C           G7              C      C                        LL 43
                 wordEnd++;
             }
             
-            const word = line.substring(wordStart, wordEnd).trim().toLowerCase();
+            const word = line.substring(wordStart, wordEnd).trim().toLowerCase();          
             
-            // Clean punctuation before dictionary lookup
-            const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
-            
-            // Check if this is the first word of the line
-            const isFirstWord = wordStart === 0 || line.substring(0, wordStart).trim() === "";
-            
-            let result;
-            
-            // Look up syllables for this word
-            if (cleanWord in SYLLABLE_DICT) {
-                const syllables = SYLLABLE_DICT[cleanWord];
-                const positionInWord = charIndex - wordStart;
-                
-                // Special handling for known words
-                if (cleanWord === "rainbow") {
-                    result = positionInWord < 4 ? "rain" : "bow";
-                } else if (cleanWord === "rainbows") {
-                    result = positionInWord < 4 ? "rain" : "bows";
-                } else {
-                    // Calculate actual syllable boundaries based on character counts
-                    const syllableBoundaries = [];
-                    let charCount = 0;
-                    for (const syllable of syllables) {
-                        charCount += syllable.length;
-                        syllableBoundaries.push(charCount);
-                    }
-                    
-                    // Find which syllable contains this position
-                    result = syllables[syllables.length - 1]; // Default to last syllable
-                    for (let i = 0; i < syllableBoundaries.length; i++) {
-                        if (positionInWord < syllableBoundaries[i]) {
-                            result = syllables[i];
-                            break;
-                        }
-                    }
-                }
-            } else {
-                // If word not in dictionary, return the clean word (no punctuation)
-                result = cleanWord;
-            }
-            
-            // Capitalize first word of line unless escaped with backslash
+			// Look up syllables for this word (prefer word with apostrophe)
+			if (word in SYLLABLE_DICT) {
+				const syllables = SYLLABLE_DICT[word];
+				const positionInWord = charIndex - wordStart;
+
+				// For contractions and single-syllable words, just use the whole word
+				if (syllables.length === 1) {
+					result = word;
+				} else if (word === "rainbow") {
+					result = positionInWord < 4 ? "rain" : "bow";
+				} else if (word === "rainbows") {
+					result = positionInWord < 4 ? "rain" : "bows";
+				} else {
+					// Calculate actual syllable boundaries based on character counts
+					const syllableBoundaries = [];
+					let charCount = 0;
+					for (const syllable of syllables) {
+						charCount += syllable.length;
+						syllableBoundaries.push(charCount);
+					}
+					// Find which syllable contains this position
+					result = syllables[syllables.length - 1]; // Default to last syllable
+					for (let i = 0; i < syllableBoundaries.length; i++) {
+						if (positionInWord < syllableBoundaries[i]) {
+							result = syllables[i];
+							break;
+						}
+					}
+				}
+			} else {
+				// Fallback: try stripped version, or just highlight the word as-is
+				const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
+				if (cleanWord in SYLLABLE_DICT) {
+					const syllables = SYLLABLE_DICT[cleanWord];
+					result = syllables.length === 1 ? word : syllables[0];
+				} else {
+					result = word;
+				}
+			}            // Capitalize first word of line unless escaped with backslash
+
             const originalWord = line.substring(wordStart, wordEnd).trim();
+			const isFirstWord = wordStart === 0 || line.substring(0, wordStart).trim() === "";
+			
             if (isFirstWord) {
                 // Check for escape character
                 if (originalWord.startsWith('\\')) {
@@ -1210,7 +1423,9 @@ C           G7              C      C                        LL 43
             if (songKey === 'rainbow') {
                 loadingStatus.textContent = 'Loading Rainbow Connection...';
             } else if (songKey === 'dylan') {
-                loadingStatus.textContent = 'Loading Don\'t Think Twice...';
+                loadingStatus.textContent = 'Loading Don\'t Think Twice...';	
+            } else if (songKey === 'The Visitor') {
+                loadingStatus.textContent = 'Loading The Visitor...';
             } else {
                 loadingStatus.textContent = 'Unknown song selection';
                 return;
