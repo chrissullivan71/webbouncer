@@ -176,6 +176,12 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
         Magnetic tape: Scrub position
     </div>
     <canvas id="gameCanvas"></canvas>
+    
+    <!-- Background music audio element -->
+    <audio id="backgroundMusic" loop preload="auto">
+        <source src="The_Visitor.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
 
     <script>
         // Embedded song data with real content
@@ -631,6 +637,7 @@ There’s a cricket on the twentieth floor
         const speedLabel = document.getElementById('speedLabel');
         const debugInfo = document.getElementById('debugInfo');
         const debugData = document.getElementById('debugData');
+        const backgroundMusic = document.getElementById('backgroundMusic');
         
         function resizeCanvas() {
             canvas.width = window.innerWidth;
@@ -1465,6 +1472,9 @@ There’s a cricket on the twentieth floor
             rising = false;
             falling = true;
             waitingForStart = true;
+            // Stop and reset background music
+            backgroundMusic.pause();
+            backgroundMusic.currentTime = 0;
             updatePlayButton();
         }
         
@@ -1493,13 +1503,19 @@ There’s a cricket on the twentieth floor
                 }
                 waitingForStart = false;
                 bounceStartTime = performance.now() / 1000;
+                // Start background music
+                backgroundMusic.play().catch(e => console.log('Audio play failed:', e));
             } else if (songPaused) {
                 const pauseDuration = (performance.now() / 1000) - pauseTime;
                 bounceStartTime += pauseDuration;
                 songPaused = false;
+                // Resume background music
+                backgroundMusic.play().catch(e => console.log('Audio play failed:', e));
             } else {
                 songPaused = true;
                 pauseTime = performance.now() / 1000;
+                // Pause background music
+                backgroundMusic.pause();
             }
             updatePlayButton();
         }
