@@ -1,0 +1,1588 @@
+<!DOCTYPE html>
+<!--
+Copyright (c) 2025 Chris Sullivan. All rights reserved.
+Bouncing Ball Teleprompter (BBT) - Web Version
+Interactive music teleprompter with synchronized bouncing ball and word highlighting
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bouncing Ball Teleprompter (BBT)</title>
+    <style>
+        /* Main application styling - full screen, no scroll, monospace font */
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1e1e1e;
+            color: white;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        
+        /* Canvas fills entire viewport and serves as main interaction surface */
+        #gameCanvas {
+            display: block;
+            background: #1e1e1e;
+            cursor: pointer;
+        }
+        
+        /* UI Controls - positioned absolutely over canvas */
+        #songSelector {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: 2px solid #00ff00;
+            padding: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border-radius: 5px;
+        }
+        
+        #loadingStatus {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            color: #00ff00;
+            padding: 5px;
+            font-size: 12px;
+        }
+        
+        #playButton {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(0,200,0,0.8);
+            color: white;
+            border: 2px solid #00ff00;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #playButton:hover {
+            background: rgba(0,255,0,0.9);
+        }
+        
+        #playButton.paused {
+            background: rgba(200,100,0,0.8);
+            border-color: #ff8800;
+        }
+        
+        #restartButton {
+            position: absolute;
+            top: 60px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(200,0,0,0.8);
+            color: white;
+            border: 2px solid #ff0000;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            z-index: 100;
+            color: #00ff00;
+            font-size: 12px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+
+    <!-- Song selection dropdown and control buttons -->
+    <select id="songSelector">
+        <option value="">Select Song...</option>
+        <option value="rainbow">Rainbow Connection</option>
+        <option value="dylan">Don't Think Twice, It's All Right</option>
+    </select>
+    <div id="loadingStatus">Select a song to begin...</div>
+    <button id="playButton">▶ PLAY</button>
+    <button id="restartButton">↻ RESET</button>
+    <div id="controls">
+        Tap canvas or button to play/pause<br>
+        Space: Play/Pause, R: Reset, Q: Quit
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+	<input type="file" id="localSongFileInput" accept=".txt" style="display:none;">
+
+    <script>
+        // ==================== CONFIGURATION AND CONSTANTS ====================
+        
+        // Song file mapping - loads both songs from GitHub Pages to avoid CORS issues
+        const songFiles = {
+            rainbow: 'williams-ascher-rainbow-connection.txt',
+            dylan: 'dont think twice.txt'
+        };
+
+        // Asset URLs - all resources load from GitHub Pages for consistent CORS behavior
+        const ASSET_BASE_URL_SONGS = 'https://1eyedogbreath.github.io/webbouncer/';
+        const ASSET_BASE_URL_IMAGES = 'https://1eyedogbreath.github.io/webbouncer/';
+        
+        // Controls button coordinates - polygon definitions for clickable areas on controls image
+        // Coordinates match original 2040x3708 image, scaled dynamically to current display size
+        const BUTTON_COORDS_ORIGINAL = {
+            playback_mode: [[200, 30], [1800, 30], [1800, 180], [200, 180]],
+            forward: [[63, 1953], [1866, 1851], [1888, 2048], [79, 2166]],
+            fast_rewind: [[162, 1242], [1011, 1207], [1038, 1411], [189, 1455]],
+            fast_forward: [[1216, 1216], [1987, 1194], [2010, 1393], [1251, 1413]],
+            pause: [[1170, 2632], [1944, 2563], [1966, 2766], [1197, 2844]],
+            stop_eject: [[154, 3454], [1934, 3229], [1956, 3434], [176, 3666]],
+            record: [[136, 2702], [976, 2619], [1002, 2844], [124, 2929]]
+        };
+
+        // Original controls image dimensions for coordinate scaling calculations
+        const ORIGINAL_CONTROLS_SIZE = { width: 2040, height: 3708 };
+
+        // ==================== GLOBAL STATE VARIABLES ====================
+        
+        // Controls functionality state
+        let scaledButtonCoords = {};              // Button coordinates scaled to current screen size
+        let playbackMode = "normal";              // Playback mode: normal, playback_idle, playback_active
+        let debugBeatAnalysis = false;            // Debug/measuring mode toggle
+        
+        // Asset references - loaded images for rendering
+        let backgroundImage = null;
+        let controlsImage = null;
+        let magTapeImage = null;
+        let iconImage = null;
+
+        // Canvas and UI element references
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const playButton = document.getElementById('playButton');
+        const restartButton = document.getElementById('restartButton');
+        const songSelector = document.getElementById('songSelector');
+        
+        // ==================== WINDOW AND CANVAS MANAGEMENT ====================
+        
+        // Resize canvas to fill viewport and reset button coordinates for recalculation
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            scaledButtonCoords = {}; // Reset so they get recalculated
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // ==================== POLYGON CLICK DETECTION ====================
+        
+        // Ray casting algorithm to determine if point is inside polygon
+        // Used for detecting clicks on irregularly shaped control buttons
+        function pointInPolygon(point, polygon) {
+            const [x, y] = point;
+            let inside = false;
+            
+            let j = polygon.length - 1;
+            for (let i = 0; i < polygon.length; i++) {
+                const [xi, yi] = polygon[i];
+                const [xj, yj] = polygon[j];
+                
+                if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+                    inside = !inside;
+                }
+                j = i;
+            }
+            
+            return inside;
+        }
+
+        // Check which control button was clicked by testing point against all polygons
+        function checkButtonClick(pos, buttonCoords) {
+            for (const [buttonName, coords] of Object.entries(buttonCoords)) {
+                if (pointInPolygon(pos, coords)) {
+                    return buttonName;
+                }
+            }
+            return null;
+        }
+
+        // ==================== COORDINATE SCALING AND POSITIONING ====================
+        
+        // Scale button coordinates from original image size to current display size
+        function scaleButtonCoordinates(originalCoords, originalImageSize, scaledImageSize) {
+            const scaleX = scaledImageSize.width / originalImageSize.width;
+            const scaleY = scaledImageSize.height / originalImageSize.height;
+            
+            return originalCoords.map(coord => [
+                Math.floor(coord[0] * scaleX),
+                Math.floor(coord[1] * scaleY)
+            ]);
+        }
+
+        // Add screen position offset to scaled coordinates
+        function offsetCoordinates(coords, offsetX, offsetY) {
+            return coords.map(coord => [coord[0] + offsetX, coord[1] + offsetY]);
+        }
+
+        // Calculate controls image size maintaining aspect ratio
+        function calculateControlsSize() {
+            const controlsHeight = canvas.height / 3 + 72;
+            const controlsWidth = Math.floor(controlsHeight * (ORIGINAL_CONTROLS_SIZE.width / ORIGINAL_CONTROLS_SIZE.height));
+            return { width: controlsWidth, height: controlsHeight };
+        }
+
+        // Scale all button coordinates to current screen size and position
+        function scaleButtonCoords() {
+            scaledButtonCoords = {};
+            
+            if (controlsImage && controlsImage.complete && controlsImage.naturalWidth > 0) {
+                const controlsSize = calculateControlsSize();
+                const controlsX = 20;
+                const controlsY = canvas.height - controlsSize.height - 20;
+                
+                for (const [buttonName, coords] of Object.entries(BUTTON_COORDS_ORIGINAL)) {
+                    // Scale to current image size
+                    const scaledCoords = scaleButtonCoordinates(coords, ORIGINAL_CONTROLS_SIZE, controlsSize);
+                    // Offset to screen position
+                    const finalCoords = offsetCoordinates(scaledCoords, controlsX, controlsY);
+                    scaledButtonCoords[buttonName] = finalCoords;
+                }
+            }
+        }
+
+        // ==================== CONTROL BUTTON CLICK HANDLING ====================
+        
+        // Process clicks on control buttons and execute appropriate actions
+        function handleControlsClick(mousePos) {
+            const clickedButton = checkButtonClick([mousePos.x, mousePos.y], scaledButtonCoords);
+            
+            if (clickedButton) {
+                const currentTime = performance.now() / 1000;
+                console.log(`Controls button clicked: ${clickedButton}`);
+                
+                // Check if playback is active (not waiting and not paused)
+                const isPlaybackActive = !waitingForStart && !songPaused;
+                
+                // Block record button during playback to prevent interference
+                if (clickedButton === 'record' && isPlaybackActive) {
+                    console.log('Record button disabled during playback');
+                    return true; // Consume the click but don't act on it
+                }
+                
+                // Handle each button type
+                if (clickedButton === 'playback_mode') {
+                    // Cycle through playback modes: normal → idle → active → normal
+                    if (playbackMode === 'normal') {
+                        playbackMode = 'playback_idle';
+                        console.log('Switched to playback mode (idle)');
+                    } else if (playbackMode === 'playback_idle') {
+                        playbackMode = 'playback_active';
+                        console.log('Started playback mode (active)');
+                    } else {
+                        playbackMode = 'normal';
+                        console.log('Returned to normal mode');
+                    }
+                } else if (clickedButton === 'forward' || clickedButton === 'pause') {
+                    // Use existing play/pause functionality
+                    togglePlayback();
+                } else if (clickedButton === 'fast_forward') {
+                    // Jump to next line with proper state reset
+                    if (lyrics.length > 0 && currentIndex < lyrics.length - 1) {
+                        currentIndex++;
+                        bounceCount = 0;
+                        bounceStartTime = currentTime;
+                        ballY = BALL_HIGH_POSITION;
+                        songLineNumber++;
+                        console.log(`Fast forward to line ${currentIndex + 1}`);
+                    } else {
+                        console.log(`Already at last line (${lyrics.length})`);
+                    }
+                } else if (clickedButton === 'fast_rewind') {
+                    // Jump to previous line with proper state reset
+                    if (currentIndex > 0) {
+                        currentIndex--;
+                        bounceCount = 0;
+                        bounceStartTime = currentTime;
+                        ballY = BALL_HIGH_POSITION;
+                        songLineNumber--;
+                        console.log(`Rewind to line ${currentIndex + 1}`);
+                    } else {
+                        console.log('Already at first line');
+                    }
+                } else if (clickedButton === 'stop_eject') {
+                    // Use existing restart functionality
+                    resetSong();
+                    waitingForStart = true;
+                    updatePlayButton();
+                    console.log('Restarted from controls');
+                } else if (clickedButton === 'record') {
+                    // Toggle debug/measuring mode (only when not playing back)
+                    debugBeatAnalysis = !debugBeatAnalysis;
+                    console.log(`Debug mode: ${debugBeatAnalysis}`);
+                }
+                
+                return true;
+            }
+            
+            return false;
+        }
+
+        // ==================== VISUAL FEEDBACK FOR CONTROLS ====================
+        
+        // Draw colored outlines around control buttons to show state and availability
+        function drawButtonOutlines() {
+            if (!scaledButtonCoords || Object.keys(scaledButtonCoords).length === 0) {
+                return;
+            }
+            
+            // Check if playback is active to determine button availability
+            const isPlaybackActive = !waitingForStart && !songPaused;
+            
+            for (const [buttonName, coords] of Object.entries(scaledButtonCoords)) {
+                if (coords.length < 3) continue;
+                
+                // Choose color based on button type and current state
+                let color;
+                if (buttonName === 'playback_mode') {
+                    // Playback mode shows different colors for each state
+                    if (playbackMode === 'normal') {
+                        color = [0, 180, 0];        // Green for normal
+                    } else if (playbackMode === 'playback_idle') {
+                        color = [200, 200, 0];      // Yellow for idle
+                    } else {
+                        color = [200, 0, 0];        // Red for active
+                    }
+                } else if (buttonName === 'forward') {
+                    color = [0, 255, 0];            // Bright green for play
+                } else if (buttonName === 'pause') {
+                    color = [255, 255, 0];          // Yellow for pause
+                } else if (buttonName === 'stop_eject') {
+                    color = [255, 0, 0];            // Red for stop/restart
+                } else if (buttonName === 'fast_rewind' || buttonName === 'fast_forward') {
+                    color = [0, 150, 255];          // Blue for skip functions
+                } else if (buttonName === 'record') {
+                    if (isPlaybackActive) {
+                        // Grey out record button during playback
+                        color = [80, 80, 80];
+                    } else {
+                        // Normal record button colors when not playing back
+                        color = debugBeatAnalysis ? [255, 50, 50] : [0, 255, 0];
+                    }
+                } else {
+                    color = [255, 255, 255];        // Default white
+                }
+                
+                // Draw polygon outline with calculated color
+                ctx.strokeStyle = colorToString(color);
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(coords[0][0], coords[0][1]);
+                for (let i = 1; i < coords.length; i++) {
+                    ctx.lineTo(coords[i][0], coords[i][1]);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            }
+        }
+        
+        // ==================== ASSET LOADING ====================
+        
+        // Load all image assets from GitHub Pages with CORS support
+        function loadAssets() {
+            let loadedCount = 0;
+            
+            // Track loading completion and log results
+            function checkComplete(imageName, success) {
+                loadedCount++;
+                console.log(`${imageName}: ${success ? 'loaded successfully' : 'failed to load'}`);
+                if (loadedCount === 4) {
+                    console.log('All assets loading complete');
+                    console.log('Background image loaded:', backgroundImage && backgroundImage.complete && backgroundImage.naturalWidth > 0);
+                    console.log('Controls image loaded:', controlsImage && controlsImage.complete && controlsImage.naturalWidth > 0);
+                    console.log('Mag tape image loaded:', magTapeImage && magTapeImage.complete && magTapeImage.naturalWidth > 0);
+                    console.log('Icon image loaded:', iconImage && iconImage.complete && iconImage.naturalWidth > 0);
+                }
+            }
+            
+            // Load background image
+            backgroundImage = new Image();
+            backgroundImage.crossOrigin = 'anonymous';
+            backgroundImage.onload = () => checkComplete('background.jpg', true);
+            backgroundImage.onerror = () => checkComplete('background.jpg', false);
+            backgroundImage.src = ASSET_BASE_URL_IMAGES + 'background.jpg';
+            
+            // Load controls image for interactive buttons
+            controlsImage = new Image();
+            controlsImage.crossOrigin = 'anonymous';
+            controlsImage.onload = () => checkComplete('controls.jpg', true);
+            controlsImage.onerror = () => checkComplete('controls.jpg', false);
+            controlsImage.src = ASSET_BASE_URL_IMAGES + 'controls.jpg';
+            
+            // Load magnetic tape image for progress indicator
+            magTapeImage = new Image();
+            magTapeImage.crossOrigin = 'anonymous';
+            magTapeImage.onload = () => checkComplete('magtape.jpg', true);
+            magTapeImage.onerror = () => checkComplete('magtape.jpg', false);
+            magTapeImage.src = ASSET_BASE_URL_IMAGES + 'magtape.jpg';
+            
+            // Load icon image
+            iconImage = new Image();
+            iconImage.crossOrigin = 'anonymous';
+            iconImage.onload = () => checkComplete('icon.png', true);
+            iconImage.onerror = () => checkComplete('icon.png', false);
+            iconImage.src = ASSET_BASE_URL_IMAGES + 'icon.png';
+        }
+        
+        loadAssets();
+        
+        // ==================== DISPLAY POSITIONING CONSTANTS ====================
+        
+        // Y-coordinates for different text elements on screen
+        const POSITION_TITLE = 120;
+        const POSITION_TIME_SIGNATURE = 150;
+        const POSITION_SECTION = 180;
+        const POSITION_CHORDS = 210;
+        const POSITION_LYRIC_LINE = 240;
+        const BALL_HIGH_POSITION = 230;
+        
+        // ==================== SONG DATA AND TIMING STATE ====================
+        
+        // Song-specific timing constants - adjusted when song loads based on time signature
+        let BOUNCE_DURATION = 0.898438;           // Time for one complete bounce cycle
+        let BOUNCES_PER_LINE = 8;                 // Number of bounces before advancing to next line
+        
+        // Song content arrays - populated when song file loads
+        let songData = {};                        // Title, time signature metadata
+        let sections = [], chords = [], lyrics = [], beats = [];  // Parsed song content
+        let beatChordWordData = {};               // Beat-to-word/chord mapping for highlighting
+        let BEAT_NUMBERS = [];                    // Beat numbers extracted from file
+        
+        // Playback state variables
+        let currentIndex = 0;                     // Current line index
+        let bounceCount = 0;                      // Bounces within current line
+        let waitingForStart = true;               // Waiting for user to start playback
+        let songPaused = false;                   // Playback paused state
+        let running = true;                       // Main loop control
+        let songLineNumber = 1;                   // Display line number (1-based)
+        let isDragging = false;                   // Progress indicator drag state
+        let currentSongKey = '';                  // Currently loaded song identifier
+        
+        // ==================== BALL PHYSICS STATE ====================
+        
+        // Ball position and physics variables
+        let ballY = BALL_HIGH_POSITION;           // Current ball Y position
+        let ballCenterX = 0;                      // Ball X position (center of screen)
+        const ballRadius = 25;                    // Ball size
+        const ballTop = BALL_HIGH_POSITION;       // Top position of bounce
+        let ballBottom = 0;                       // Bottom position (calculated)
+        let bounceStartTime = null;               // Time when current bounce started
+        let gravity = 0;                          // Gravity constant for physics
+        let rising = false;                       // Ball moving upward
+        let falling = true;                       // Ball moving downward
+        
+        // ==================== BALL PHYSICS CALCULATIONS ====================
+        
+        // Initialize ball physics based on screen size and bounce duration
+        function initBallPhysics() {
+            ballCenterX = canvas.width / 2;
+            ballBottom = canvas.height - 100;
+            const fallTime = BOUNCE_DURATION / 2;
+            const bounceHeight = ballBottom - ballTop;
+            gravity = (2 * bounceHeight) / (fallTime ** 2);
+        }
+        
+        // ==================== TEXT PROCESSING UTILITIES ====================
+        
+        // Remove extra whitespace from text lines
+        function cleanText(text) {
+            return text.trim();
+        }
+        
+        // Remove LL line numbers and ZZZ beat markers from song lines
+        function getRidOfLL(cleanedLine) {
+            cleanedLine = cleanedLine.replace(/\t/g, '    ');
+            
+            if (cleanedLine.includes('LL')) {
+                const llIndex = cleanedLine.indexOf('LL');
+                cleanedLine = cleanedLine.substring(0, llIndex).trimEnd();
+                
+                if (cleanedLine.includes('ZZZ')) {
+                    const zzzIndex = cleanedLine.indexOf('ZZZ');
+                    cleanedLine = cleanedLine.substring(0, zzzIndex).trimEnd();
+                }
+            }
+            return cleanedLine;
+        }
+        
+        // ==================== BEAT ANALYSIS ====================
+        
+        // Extract beat number positions from beat timing lines
+        function findBeatPositions(beatLine) {
+            const beats = [];
+            const regex = /\d+/g;
+            let match;
+            while ((match = regex.exec(beatLine)) !== null) {
+                const beatNum = parseInt(match[0]);
+                if (beatNum >= 1 && beatNum <= 15) {
+                    beats.push([beatNum, match.index]);
+                }
+            }
+            return beats;
+        }
+        
+        // Extract word or chord at specific character position in line
+        function extractItemAtPosition(line, charIndex) {
+            if (charIndex >= line.length) return "";
+            
+            let start = charIndex;
+            while (start > 0 && line[start-1] !== ' ') {
+                start--;
+            }
+            
+            let end = charIndex;
+            while (end < line.length && line[end] !== ' ') {
+                end++;
+            }
+            
+            return line.substring(start, end).trim();
+        }
+       
+        // ==================== SYLLABLE DICTIONARY ====================
+        
+        // Syllable breakdown dictionary for precise word highlighting
+        // Maps words to syllable arrays for beat-synchronized highlighting
+        const SYLLABLE_DICT = {
+            "slipped": ["slipped"],
+            "surly": ["sur", "ly"], 
+            "bonds": ["bonds"],
+            "danced": ["danced"],
+            "skies": ["skies"],
+            "laughter": ["laugh", "ter"],
+            "silvered": ["sil", "verd"],
+            "wings": ["wings"],
+            "climbed": ["climbed"],
+            "joined": ["joined"],
+            "tumbling": ["tum", "bling"],
+            "mirth": ["mirth"],
+            "delirious": ["de", "lir", "i", "ous"],
+            "burning": ["burn", "ing"],
+            "footless": ["foot", "less"],
+            "halls": ["halls"],
+            "rainbow": ["rain", "bow"],
+            "rainbows": ["rain", "bows"],
+            "visions": ["vi", "sions"],
+            "illusions": ["il", "lu", "sions"],
+            "believe": ["be", "lieve"],
+            "believed": ["be", "lieved"],
+            "amazing": ["a", "maz", "ing"],
+            "connection": ["con", "nec", "tion"],
+            "dreamers": ["dream", "ers"],
+            "answered": ["an", "swered"],
+            "morning": ["morn", "ing"],
+            "stargazing": ["star", "gaz", "ing"],
+            "probably": ["prob", "ab", "ly"],
+            "voices": ["voic", "es"],
+            "calling": ["call", "ing"],
+            "sailors": ["sail", "ors"],
+            "ignore": ["ig", "nore"],
+            "supposed": ["sup", "posed"],
+            "something": ["some", "thing"],
+            "other": ["oth", "er"],
+            "under": ["un", "der"],
+            "magic": ["mag", "ic"],
+            "asleep": ["a", "sleep"],
+            "lovers": ["lov", "ers"],
+            "someday": ["some", "day"],
+            "only": ["on", "ly"],
+            "wonder": ["won", "der"],
+            "baby": ["ba", "by"],
+            "never": ["nev", "er"],
+            "somehow": ["some", "how"],
+            "rooster": ["roos", "ter"],
+            "window": ["win", "dow"],
+            "reason": ["rea", "son"],
+            "turnin": ["turn", "in"],
+            "turning": ["turn", "ing"],
+            "callin": ["call", "in"],
+            "calling": ["call", "ing"],
+            "thinkin": ["think", "in"],
+            "thinking": ["think", "ing"],
+            "wondrin": ["wond", "rin"],
+            "wondering": ["won", "der", "ing"],
+            "walking": ["walk", "ing"],
+            "woman": ["wom", "an"],
+            "wanted": ["want", "ed"],
+            "treated": ["treat", "ed"],
+            "better": ["bet", "ter"],
+            "precious": ["pre", "cious"],
+            "harmonica": ["har", "mon", "i", "ca"],
+            "honey": ["hon", "ey"],
+            "goodbye": ["good", "bye"],
+            "talkin": ["talk", "in"],
+            "talking": ["talk", "ing"],
+            "kinda": ["kind", "a"],
+            "wasted": ["wast", "ed"],
+            "travelin": ["trav", "el", "in"],
+            "anymore": ["an", "y", "more"], 
+            "farewell": ["fare", "well"],
+            "unkind": ["un", "kind"],
+            "anyway": ["an", "y", "way"],
+            "somethin": ["some", "thin"],
+            
+            // Contractions - handle apostrophe words properly
+            "whats": ["what\'s"],
+            "dont": ["don\'t"], 
+            "wont": ["won\'t"],
+            "cant": ["can\'t"],
+            "im": ["I\'m"],
+            "youre": ["you\'re"],
+            "theyre": ["they\'re"],
+            "were": ["we\'re"],
+            "isnt": ["is", "n\'t"],
+            "arent": ["are", "n\'t"],
+            "wasnt": ["was", "n\'t"],
+            "werent": ["were", "n\'t"],
+            "havent": ["have", "n\'t"],
+            "hasnt": ["has", "n\'t"],
+            "hadnt": ["had", "n\'t"],
+            "wouldnt": ["would", "n\'t"],
+            "couldnt": ["could", "n\'t"],
+            "shouldnt": ["should", "n\'t"],
+            "ive": ["I\'ve"],
+            "youve": ["you\'ve"],
+            "weve": ["we\'ve"],
+            "theyve": ["they\'ve"],
+            "hes": ["he\'s"],
+            "shes": ["she\'s"],
+            "its": ["it\'s"],
+            "thats": ["that\'s"],
+            "heres": ["here\'s"],
+            "theres": ["there\'s"],
+            "wheres": ["where\'s"]
+        };
+
+        // ==================== SYLLABLE EXTRACTION ====================
+        
+        // Extract specific syllable at beat position using dictionary and character position
+        function extractSyllableAtPosition(line, charIndex) {
+            if (charIndex >= line.length) return "";
+            
+            // Find word boundaries at this character position
+            let wordStart = charIndex;
+            while (wordStart > 0 && line[wordStart-1] !== ' ') {
+                wordStart--;
+            }
+            
+            let wordEnd = charIndex;
+            while (wordEnd < line.length && line[wordEnd] !== ' ') {
+                wordEnd++;
+            }
+            
+            const word = line.substring(wordStart, wordEnd).trim().toLowerCase();
+            const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
+            const isFirstWord = wordStart === 0 || line.substring(0, wordStart).trim() === "";
+            
+            let result;
+            
+            // Look up syllables in dictionary and calculate which syllable at this position
+            if (cleanWord in SYLLABLE_DICT) {
+                const syllables = SYLLABLE_DICT[cleanWord];
+                const positionInWord = charIndex - wordStart;
+                
+                // Special cases for specific words
+                if (cleanWord === "rainbow") {
+                    result = positionInWord < 4 ? "rain" : "bow";
+                } else if (cleanWord === "rainbows") {
+                    result = positionInWord < 4 ? "rain" : "bows";
+                } else {
+                    // Calculate syllable boundaries based on character counts
+                    const syllableBoundaries = [];
+                    let charCount = 0;
+                    for (const syllable of syllables) {
+                        charCount += syllable.length;
+                        syllableBoundaries.push(charCount);
+                    }
+                    
+                    // Find which syllable contains this character position
+                    result = syllables[syllables.length - 1];
+                    for (let i = 0; i < syllableBoundaries.length; i++) {
+                        if (positionInWord < syllableBoundaries[i]) {
+                            result = syllables[i];
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // Use clean word if not in dictionary
+                result = cleanWord;
+            }
+            
+            // Handle capitalization - first word of line is capitalized unless escaped
+            const originalWord = line.substring(wordStart, wordEnd).trim();
+            if (isFirstWord) {
+                if (originalWord.startsWith('\\')) {
+                    result = result.toLowerCase();  // Escape character keeps lowercase
+                } else {
+                    result = result.charAt(0).toUpperCase() + result.slice(1);  // Capitalize first word
+                }
+            }
+            
+            return result;
+        }
+        
+        // ==================== CHORD AND WORD EXTRACTION ====================
+        
+        // Extract chords and words at beat positions for highlighting coordination
+        function extractChordsAndWords(chordLine, lyricLine, beatPositions) {
+            const results = [];
+            for (const [beatNum, charIndex] of beatPositions) {
+                const chord = extractItemAtPosition(chordLine, charIndex);
+                const word = extractItemAtPosition(lyricLine, charIndex);
+                results.push([beatNum, chord, word]);
+            }
+            return results;
+        }
+        
+        // ==================== CHORD RECOGNITION ====================
+        
+        // Comprehensive chord list for identifying chord lines vs lyric lines
+        const CHORDS = [
+            "C", "D", "E", "F", "G", "A", "B",
+            "Cm", "Dm", "Em", "Fm", "Gm", "Am", "Bm",
+            "C7", "D7", "E7", "F7", "G7", "A7", "B7",
+            "Cm7", "Dm7", "Em7", "Fm7", "Gm7", "Am7", "Bm7",
+            "Cmaj7", "Dmaj7", "Emaj7", "Fmaj7", "Gmaj7", "Amaj7", "Bmaj7",
+            "C♭", "D♭", "E♭", "F♭", "G♭", "A♭", "B♭",
+            "C♯", "D♯", "E♯", "F♯", "G♯", "A♯", "B♯"
+        ];
+        
+        // Determine if line contains chords (40% threshold)
+        function checkForChordLine(line, chords) {
+            if (!line) return false;
+            const words = line.split(/\s+/).filter(word => word.trim());
+            const fortyPercentCount = Math.floor(0.4 * words.length);
+            let matchCount = 0;
+            
+            for (const word of words) {
+                const cleanWord = word.replace(/[\[\]]/g, '');
+                if (chords.includes(cleanWord)) {
+                    matchCount++;
+                }
+            }
+            return matchCount >= fortyPercentCount;
+        }
+        
+        // ==================== LINE CATEGORIZATION ====================
+        
+        // Categorize song file lines into sections, chords, lyrics, or beat timing
+        function categorizeLine(line) {
+            const cleanedLine = cleanText(line);
+            
+            // Section headers have [brackets]
+            if (cleanedLine.includes('[') && cleanedLine.includes(']')) {
+                return "sections";
+            }
+            
+            // Chord lines have high percentage of chord names
+            if (checkForChordLine(cleanedLine, CHORDS)) {
+                return "chords";
+            }
+            
+            // Text lines - lyrics or beat timing
+            const pattern = /[a-zA-Z\s]+/;
+            if (pattern.test(cleanedLine)) {
+                if (!cleanedLine.includes('ZZZ')) {
+                    return "lyrics";
+                } else if (cleanedLine.includes('ZZZ')) {
+                    return "beats";      // ZZZ indicates beat timing line
+                }
+            }
+            
+            return "unknown";
+        }
+        
+        // ==================== TIME SIGNATURE PARSING ====================
+        
+        // Parse time signature string (e.g., "3/4", "4/4") into numerator/denominator
+        function parseTimeSignature(timeSignatureStr) {
+            try {
+                if (timeSignatureStr.includes('/')) {
+                    const parts = timeSignatureStr.split('/');
+                    return [parseInt(parts[0]), parseInt(parts[1])];
+                }
+            } catch (e) {
+                console.log(`Could not parse time signature: ${timeSignatureStr}, using 4/4`);
+            }
+            return [4, 4];  // Default fallback
+        }
+        
+        // ==================== SONG DATA PROCESSING ====================
+        
+        // Process loaded song file into categorized arrays and timing data
+        function processSongData(data) {
+            const lines = data.split('\n').filter(line => line.trim());
+            
+            const title = lines[0] || "[No title]";
+            const timeSignatureStr = lines[1] || "4/4";
+            const remainingLines = lines.slice(2);
+            
+            // Set timing constants based on time signature
+            const [beatsPerMeasure, noteValue] = parseTimeSignature(timeSignatureStr);
+            
+            if (beatsPerMeasure === 3) {      // 3/4 time (Rainbow Connection)
+                BOUNCES_PER_LINE = 4;
+                BOUNCE_DURATION = 1.625;
+            } else {                          // 4/4 time (Don't Think Twice)
+                BOUNCES_PER_LINE = 4;
+                BOUNCE_DURATION = 1.625;
+            }
+            
+            console.log(`Time signature: ${beatsPerMeasure}/${noteValue}, Bounces per line: ${BOUNCES_PER_LINE}, Bounce duration: ${BOUNCE_DURATION}`);
+            
+            // Initialize arrays for categorized content
+            sections = [];
+            chords = [];
+            lyrics = [];
+            beats = [];
+            beatChordWordData = {};
+            
+            // Categorize each line and build chord/word mapping for highlighting
+            for (let i = 0; i < remainingLines.length; i++) {
+                const line = remainingLines[i];
+                const lineType = categorizeLine(line);
+                
+                if (lineType === "sections") {
+                    sections.push(line);
+                } else if (lineType === "chords") {
+                    chords.push(line);
+                } else if (lineType === "lyrics") {
+                    lyrics.push(line);
+                } else if (lineType === "beats") {
+                    beats.push(line);
+                    
+                    // Build beat-to-chord/word mapping for synchronized highlighting
+                    const cleanedBeatLine = getRidOfLL(line);
+                    const beatPositions = findBeatPositions(cleanedBeatLine);
+                    const beatLineIndex = beats.length - 1;
+                    
+                    if (beatLineIndex < chords.length && beatLineIndex < lyrics.length) {
+                        const chordLine = getRidOfLL(chords[beatLineIndex]);
+                        const lyricLine = getRidOfLL(lyrics[beatLineIndex]);
+                        const chordWordData = extractChordsAndWords(chordLine, lyricLine, beatPositions);
+                        beatChordWordData[beatLineIndex] = chordWordData;
+                    }
+                }
+            }
+            
+            // Clean all lines by removing markers
+            for (let i = 0; i < Math.max(lyrics.length, chords.length, beats.length, sections.length); i++) {
+                if (i < lyrics.length) lyrics[i] = getRidOfLL(lyrics[i]);
+                if (i < chords.length) chords[i] = getRidOfLL(chords[i]);
+                if (i < beats.length) beats[i] = getRidOfLL(beats[i]);
+                if (i < sections.length) sections[i] = getRidOfLL(sections[i]);
+            }
+            
+            console.log(`Loaded: ${sections.length} sections, ${chords.length} chords, ${lyrics.length} lyrics, ${beats.length} beats`);
+            
+            // Extract beat numbers from first beat line for highlighting sync
+            if (beats.length > 0) {
+                const firstBeatLine = beats[0];
+                BEAT_NUMBERS = [];
+                const regex = /\d+/g;
+                let match;
+                while ((match = regex.exec(firstBeatLine)) !== null) {
+                    const beatNum = parseInt(match[0]);
+                    if (beatNum >= 1 && beatNum <= 15) {
+                        BEAT_NUMBERS.push(beatNum);
+                    }
+                }
+                console.log("Beat numbers (from file):", BEAT_NUMBERS);
+            } else {
+                BEAT_NUMBERS = [];
+                console.log("⚠️ No beat numbers found in file!");
+            }
+            
+            songData.title = title;
+            songData.timeSignature = timeSignatureStr;
+        }
+        
+        // ==================== SONG LOADING ====================
+        
+        // Handle song selection dropdown change
+        songSelector.addEventListener('change', function(e) {
+            const songKey = e.target.value;
+            if (!songKey) {
+                document.getElementById('loadingStatus').textContent = 'Select a song to begin...';
+                document.getElementById('loadingStatus').style.display = 'block';
+                return;
+            }
+            
+            loadSongFromFile(songKey);
+        });
+
+        // Load selected song from external file via fetch
+        async function loadSongFromFile(songKey) {
+            const loadingStatus = document.getElementById('loadingStatus');
+
+			localFileListenerActive = false;
+			
+            currentSongKey = songKey;
+            
+            // Set loading message based on song
+            if (songKey === 'rainbow') {
+                loadingStatus.textContent = 'Loading Rainbow Connection...';
+            } else if (songKey === 'dylan') {
+                loadingStatus.textContent = 'Loading Don\'t Think Twice...';
+            } else {
+                loadingStatus.textContent = 'Unknown song selection';
+                return;
+            }
+            
+            loadingStatus.style.display = 'block';
+            loadingStatus.style.color = '#00ff00';
+            
+            try {
+                const filename = songFiles[songKey];
+                if (!filename) {
+                    throw new Error(`No file mapping for song: ${songKey}`);
+                }
+                
+                // Fetch song file from GitHub Pages
+                const response = await fetch(ASSET_BASE_URL_SONGS + filename);
+                if (!response.ok) {
+                    throw new Error(`Failed to load song file: ${response.status} ${response.statusText}  Remote file missing. Press 'L' to use a local file.`);
+                }
+				
+                const songText = await response.text();
+                processSongData(songText);
+                initBallPhysics();
+                resetSong();
+                loadingStatus.style.display = 'none';
+                console.log(`Loaded song file: ${filename}`);
+                
+            } catch (error) {
+                console.error('Error loading song:', error);
+                loadingStatus.textContent = `Error loading song: ${error.message}`;
+				loadingStatus.style.color = '#ff0000';
+				enableLocalFileListener();
+            }
+        }
+		let localFileListenerActive = false;
+
+		// Listen for 'L' key if remote load fails
+		function enableLocalFileListener() {
+			if (!localFileListenerActive) {
+				window.addEventListener('keydown', handleLocalFileKey, { once: true });
+				localFileListenerActive = true;
+			}
+		}
+		function handleLocalFileKey(event) {
+			if (event.key === 'l' || event.key === 'L') {
+				document.getElementById('localSongFileInput').click();
+			}
+		}
+
+		// When a file is picked, read it and process
+		document.getElementById('localSongFileInput').addEventListener('change', function(event) {
+			const file = event.target.files[0];
+			if (file) {
+				const reader = new FileReader();
+				reader.onload = function(e) {
+					const songText = e.target.result;
+					processSongData(songText);
+					initBallPhysics();
+					resetSong();
+					document.getElementById('loadingStatus').style.display = 'none';
+				};
+				reader.readAsText(file);
+			}
+		});
+		
+        // ==================== COLOR UTILITIES ====================
+        
+        // Interpolate between two RGB colors for smooth highlighting animation
+        function interpolateColor(color1, color2, factor) {
+            const r = Math.floor(color1[0] + (color2[0] - color1[0]) * factor);
+            const g = Math.floor(color1[1] + (color2[1] - color1[1]) * factor);
+            const b = Math.floor(color1[2] + (color2[2] - color1[2]) * factor);
+            return [r, g, b];
+        }
+        
+        // Convert RGB array to CSS color string
+        function colorToString(color) {
+            return `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+        }
+        
+        // ==================== PLAYBACK CONTROL ====================
+        
+        // Reset song to beginning with all state variables
+        function resetSong() {
+            currentIndex = 0;
+            bounceCount = 0;
+            ballY = BALL_HIGH_POSITION;
+            bounceStartTime = null;
+            songPaused = false;
+            songLineNumber = 1;
+            rising = false;
+            falling = true;
+            waitingForStart = true;
+            updatePlayButton();
+        }
+        
+        // Update play button text and styling based on current state
+        function updatePlayButton() {
+            if (waitingForStart) {
+                playButton.textContent = currentIndex === 0 ? "▶ PLAY" : "↻ RESTART";
+                playButton.className = '';
+            } else if (songPaused) {
+                playButton.textContent = "▶ PLAY";
+                playButton.className = 'paused';
+            } else {
+                playButton.textContent = "⏸ PAUSE";
+                playButton.className = '';
+            }
+        }
+        
+        // Toggle between play/pause states with proper timing adjustments
+        function togglePlayback() {
+            if (!currentSongKey) {
+                alert('Please select a song first');
+                return;
+            }
+            
+            if (waitingForStart) {
+                // Start playback from beginning or current position
+                if (currentIndex > 0) {
+                    resetSong();
+                }
+                waitingForStart = false;
+                bounceStartTime = performance.now() / 1000;
+            } else if (songPaused) {
+                // Resume - adjust start time to account for pause duration
+                const pauseDuration = (performance.now() / 1000) - pauseTime;
+                bounceStartTime += pauseDuration;
+                songPaused = false;
+            } else {
+                // Pause - record pause time
+                songPaused = true;
+                pauseTime = performance.now() / 1000;
+            }
+            updatePlayButton();
+        }
+        
+        let pauseTime = 0;
+        
+        // ==================== KEYBOARD EVENT HANDLING ====================
+        
+        // Handle keyboard shortcuts for playback control
+        document.addEventListener('keydown', function(e) {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePlayback();
+            } else if (e.code === 'KeyR') {
+                e.preventDefault();
+                resetSong();
+                waitingForStart = true;
+                updatePlayButton();
+            } else if (e.code === 'Escape' || e.code === 'KeyQ') {
+                e.preventDefault();
+                resetSong();
+                waitingForStart = true;
+                updatePlayButton();
+            }
+        });
+        
+        // ==================== PROGRESS INDICATOR FUNCTIONALITY ====================
+        
+        // Calculate clickable area for progress indicator drag
+        function getProgressIndicatorRect() {
+            if (magTapeImage && magTapeImage.complete && magTapeImage.naturalWidth > 0) {
+                const tapeHeight = canvas.height / 8;
+                return {
+                    x: 0,
+                    y: 0,
+                    width: canvas.width,
+                    height: tapeHeight
+                };
+            } else {
+                const progressHeight = canvas.height / 8;
+                return {
+                    x: 0,
+                    y: 0,
+                    width: canvas.width,
+                    height: progressHeight
+                };
+            }
+        }
+        
+        // Test if click position is in progress indicator area
+        function isInProgressIndicator(x, y) {
+            const rect = getProgressIndicatorRect();
+            return rect && x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+        }
+        
+        // Handle dragging progress indicator to seek through song
+        function handleProgressDrag(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+            
+            if (lyrics.length > 0) {
+                const progress = Math.max(0, Math.min(1, x / canvas.width));
+                const newIndex = Math.floor(progress * lyrics.length);
+                currentIndex = Math.min(newIndex, lyrics.length - 1);
+                songLineNumber = currentIndex + 1;
+                bounceCount = 0;
+                ballY = BALL_HIGH_POSITION;
+                bounceStartTime = performance.now() / 1000;
+            }
+        }
+        
+        // ==================== MOUSE EVENT HANDLING ====================
+        
+        // Enhanced mouse handling with controls support and priority ordering
+        canvas.addEventListener('mousedown', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            let clickHandled = false;
+            
+            // Check controls buttons first (highest priority)
+            if (Object.keys(scaledButtonCoords).length > 0) {
+                const relativePos = { x: x, y: y };
+                if (handleControlsClick(relativePos)) {
+                    clickHandled = true;
+                }
+            }
+            
+            // Check progress indicator if no button clicked
+            if (!clickHandled && isInProgressIndicator(x, y)) {
+                isDragging = true;
+                handleProgressDrag(e.clientX, e.clientY);
+                e.preventDefault();
+            } else if (!clickHandled) {
+                // General canvas click for play/pause (lowest priority)
+                e.preventDefault();
+                togglePlayback();
+            }
+        });
+        
+        // Handle mouse movement for progress dragging
+        document.addEventListener('mousemove', function(e) {
+            if (isDragging) {
+                handleProgressDrag(e.clientX, e.clientY);
+                e.preventDefault();
+            }
+        });
+        
+        // End dragging on mouse release
+        document.addEventListener('mouseup', function(e) {
+            if (isDragging) {
+                isDragging = false;
+                e.preventDefault();
+            }
+        });
+        
+        // ==================== TOUCH EVENT HANDLING ====================
+        
+        // Touch events mirror mouse events for mobile support
+        canvas.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                let clickHandled = false;
+                
+                // Check controls first, then progress, then general touch
+                if (Object.keys(scaledButtonCoords).length > 0) {
+                    const relativePos = { x: x, y: y };
+                    if (handleControlsClick(relativePos)) {
+                        clickHandled = true;
+                    }
+                }
+                
+                if (!clickHandled && isInProgressIndicator(x, y)) {
+                    isDragging = true;
+                    handleProgressDrag(touch.clientX, touch.clientY);
+                    e.preventDefault();
+                } else if (!clickHandled) {
+                    e.preventDefault();
+                    togglePlayback();
+                }
+            }
+        });
+        
+        document.addEventListener('touchmove', function(e) {
+            if (isDragging && e.touches.length === 1) {
+                const touch = e.touches[0];
+                handleProgressDrag(touch.clientX, touch.clientY);
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('touchend', function(e) {
+            if (isDragging) {
+                isDragging = false;
+                e.preventDefault();
+            }
+        });
+        
+        // ==================== UI BUTTON EVENT HANDLING ====================
+        
+        // Play button click handler
+        playButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            togglePlayback();
+        });
+        
+        playButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            togglePlayback();
+        });
+        
+        // Restart button click handler
+        restartButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            resetSong();
+            waitingForStart = true;
+            updatePlayButton();
+        });
+        
+        restartButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            resetSong();
+            waitingForStart = true;
+            updatePlayButton();
+        });
+        
+        // Prevent context menu on long press
+        canvas.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        });
+        
+        // ==================== TEXT RENDERING UTILITIES ====================
+        
+        // Render text with specified font, position, and color
+        function renderText(text, x, y, color, fontSize = 40) {
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            ctx.fillStyle = colorToString(color);
+            ctx.fillText(text, x, y);
+        }
+        
+        // Calculate pixel position of character index within rendered text
+        function calculatePixelPosition(text, x, charIndex, fontSize = 40) {
+            if (charIndex >= text.length) return x;
+            
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            const textBefore = text.substring(0, charIndex);
+            const width = ctx.measureText(textBefore).width;
+            return x + width;
+        }
+        
+        // Render single word at exact pixel coordinates
+        function renderWordAtPosition(word, x, y, color, fontSize = 40) {
+            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+            ctx.fillStyle = colorToString(color);
+            ctx.fillText(word, x, y);
+        }
+        
+        // ==================== MAIN RENDERING LOOP ====================
+        
+        // Main render function - handles all drawing and animation logic
+        function render() {
+            if (!running) return;
+            
+            const currentTime = performance.now() / 1000;
+            
+            // ---- Background Drawing ----
+            if (backgroundImage && backgroundImage.complete && backgroundImage.naturalWidth > 0) {
+                ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+            } else {
+                // Fallback gradient background if image fails to load
+                const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, '#2a2a2a');
+                gradient.addColorStop(1, '#1a1a1a');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            // ---- Progress Bar at Top ----
+            const progressHeight = canvas.height / 8;
+            
+            if (magTapeImage && magTapeImage.complete && magTapeImage.naturalWidth > 0) {
+                ctx.drawImage(magTapeImage, 0, 0, canvas.width, progressHeight);
+            } else {
+                // Fallback progress bar with tape-like pattern
+                ctx.fillStyle = '#333333';
+                ctx.fillRect(0, 0, canvas.width, progressHeight);
+                
+                ctx.strokeStyle = '#555555';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(0, 0, canvas.width, progressHeight);
+                
+                // Simulated magnetic tape pattern
+                ctx.fillStyle = '#444444';
+                for (let i = 0; i < canvas.width; i += 20) {
+                    ctx.fillRect(i, progressHeight * 0.3, 10, progressHeight * 0.4);
+                }
+            }
+            
+            // ---- Progress Indicator ----
+            if (!waitingForStart && lyrics.length > 0) {
+                const indicatorWidth = 8;
+                const positionX = (currentIndex / lyrics.length) * canvas.width;
+                const indicatorHeight = progressHeight / 2;
+                const indicatorY = progressHeight / 4;
+                
+                const rectX = Math.max(0, Math.min(positionX - indicatorWidth / 2, canvas.width - indicatorWidth));
+                
+                // Green progress bar
+                ctx.fillStyle = colorToString([0, 255, 0]);
+                ctx.fillRect(rectX, indicatorY, indicatorWidth, indicatorHeight);
+                
+                // White circle for precise position
+                ctx.beginPath();
+                ctx.arc(rectX + indicatorWidth / 2, indicatorY + indicatorHeight / 2, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+            }
+            
+            // ---- Controls Area ----
+            const controlsHeight = canvas.height / 3 + 72;
+            const controlsY = canvas.height - controlsHeight - 20;
+            const controlsX = 20;
+            
+            if (controlsImage && controlsImage.complete && controlsImage.naturalWidth > 0) {
+                const controlsWidth = (controlsImage.width * controlsHeight) / controlsImage.height;
+                ctx.drawImage(controlsImage, controlsX, controlsY, controlsWidth, controlsHeight);
+                
+                // Scale button coordinates and draw visual feedback
+                if (Object.keys(scaledButtonCoords).length === 0) {
+                    scaleButtonCoords();
+                }
+                drawButtonOutlines();
+            } else {
+                // Fallback control panel with basic button indicators
+                const controlsWidth = controlsHeight * 0.55;
+                ctx.fillStyle = '#2a2a2a';
+                ctx.fillRect(controlsX, controlsY, controlsWidth, controlsHeight);
+                
+                ctx.strokeStyle = '#555555';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(controlsX, controlsY, controlsWidth, controlsHeight);
+                
+                // Draw basic control button representations
+                const buttonSize = 40;
+                const buttonSpacing = 60;
+                const startY = controlsY + 50;
+                
+                ctx.fillStyle = '#00aa00';
+                ctx.fillRect(controlsX + 30, startY, buttonSize, buttonSize);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 24px Arial';
+                ctx.fillText('▶', controlsX + 40, startY + 30);
+                
+                ctx.fillStyle = '#aaaa00';
+                ctx.fillRect(controlsX + 30, startY + buttonSpacing, buttonSize, buttonSize);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText('⏸', controlsX + 40, startY + buttonSpacing + 30);
+                
+                ctx.fillStyle = '#aa0000';
+                ctx.fillRect(controlsX + 30, startY + buttonSpacing * 2, buttonSize, buttonSize);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText('⏹', controlsX + 40, startY + buttonSpacing * 2 + 30);
+            }
+            
+            // ---- Line Number Display ----
+            if (!waitingForStart) {
+                ctx.font = 'bold 40px Courier New';
+                ctx.fillStyle = colorToString([0, 255, 0]);
+                const progressText = String(songLineNumber).padStart(3, '0');
+                ctx.fillText(progressText, controlsX + 50, controlsY + 60);
+            }
+            
+            // ---- Song Information ----
+            if (songData.title) {
+                renderText(songData.title, 50, POSITION_TITLE, [0, 255, 0]);
+            }
+            if (songData.timeSignature) {
+                renderText(songData.timeSignature, 50, POSITION_TIME_SIGNATURE, [0, 255, 0]);
+            }
+            
+            // ---- Status Messages ----
+            if (waitingForStart && !currentSongKey) {
+                const message = "Select a song to begin";
+                renderText(message, canvas.width - 400, canvas.height - 100, [255, 255, 255]);
+            } else if (waitingForStart) {
+                const message = currentIndex === 0 ? "Tap to bounce" : "Tap to restart";
+                renderText(message, canvas.width - 300, canvas.height - 100, [255, 255, 255]);
+            }
+            
+            // ---- Song Content with Beat-Synchronized Highlighting ----
+            if (lyrics.length > 0 && chords.length > 0 && ((!waitingForStart) || (waitingForStart && currentIndex > 0))) {
+                const chordText = chords[currentIndex % chords.length].replace(/\[|\]/g, '');
+                const lyricText = lyrics[currentIndex % lyrics.length];
+                
+                let highlightingActive = false;
+                const shouldHighlightBall = currentIndex in beatChordWordData && rising;
+                
+                // Check for beat-synchronized highlighting
+                if (shouldHighlightBall) {
+                    const currentBeatData = beatChordWordData[currentIndex];
+                    const currentBeatNumber = BEAT_NUMBERS.length > 0 ? 
+                        BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length] : (bounceCount + 1);
+                    
+                    // Find matching beat for highlighting
+                    for (const [beatNum, chord, word] of currentBeatData) {
+                        if (beatNum === currentBeatNumber) {
+                            highlightingActive = true;
+                            
+                            // Calculate animation factor for color interpolation
+                            const dt = currentTime - bounceStartTime;
+                            const beatProgress = (dt % BOUNCE_DURATION) / BOUNCE_DURATION;
+                            const beatFactor = rising ? beatProgress : (1.0 - beatProgress);
+                            
+                            // Render base text
+                            renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+                            renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
+                            
+                            // Render highlighted words/chords at precise positions
+                            const beatPositions = findBeatPositions(getRidOfLL(beats[currentIndex]));
+                            
+                            for (const [bNum, charIndex] of beatPositions) {
+                                if (bNum === beatNum) {
+                                    if (word) {
+                                        // Highlight syllable in lyrics
+                                        const syllable = extractSyllableAtPosition(lyricText, charIndex);
+                                        const pixelX = calculatePixelPosition(lyricText, 50, charIndex);
+                                        const highlightColor = interpolateColor([255, 255, 255], [0, 255, 255], beatFactor);
+                                        
+                                        // Clear background and render highlighted syllable
+                                        ctx.fillStyle = '#1e1e1e';
+                                        const syllableWidth = ctx.measureText(syllable).width;
+                                        ctx.fillRect(pixelX, POSITION_LYRIC_LINE - 35, syllableWidth, 45);
+                                        
+                                        renderWordAtPosition(syllable, pixelX, POSITION_LYRIC_LINE, highlightColor);
+                                    }
+                                    
+                                    if (chord) {
+                                        // Highlight chord
+                                        const pixelX = calculatePixelPosition(chordText, 50, charIndex);
+                                        const highlightColor = interpolateColor([255, 165, 0], [255, 255, 0], beatFactor);
+                                        
+                                        // Clear background and render highlighted chord
+                                        ctx.fillStyle = '#1e1e1e';
+                                        const chordWidth = ctx.measureText(chord).width;
+                                        ctx.fillRect(pixelX, POSITION_CHORDS - 35, chordWidth, 45);
+                                        
+                                        renderWordAtPosition(chord, pixelX, POSITION_CHORDS, highlightColor);
+                                    }
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                
+                // Normal rendering when no highlighting active
+                if (!highlightingActive) {
+                    renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+                    renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
+                }
+                
+                // Section header
+                if (sections.length > 0) {
+                    renderText(sections[currentIndex % sections.length], 50, POSITION_SECTION, [0, 0, 255]);
+                }
+            }
+            
+            // ---- Ball Physics and Movement ----
+            if (!songPaused && !waitingForStart && bounceStartTime !== null) {
+                const dt = currentTime - bounceStartTime;
+                
+                if (dt <= BOUNCE_DURATION) {
+                    // Within bounce cycle - calculate position using gravity physics
+                    const fallTime = BOUNCE_DURATION / 2;
+                    
+                    if (dt <= fallTime) {
+                        // Falling phase
+                        falling = true;
+                        rising = false;
+                        ballY = ballTop + 0.5 * gravity * (dt ** 2);
+                        if (ballY >= ballBottom) ballY = ballBottom;
+                    } else {
+                        // Rising phase
+                        const riseTime = dt - fallTime;
+                        falling = false;
+                        rising = true;
+                        const remainingRiseTime = fallTime - riseTime;
+                        ballY = ballTop + 0.5 * gravity * (remainingRiseTime ** 2);
+                        if (ballY < ballTop) ballY = ballTop;
+                    }
+                } else {
+                    // Bounce cycle complete - start new bounce and advance if needed
+                    bounceStartTime = currentTime;
+                    ballY = ballTop;
+                    bounceCount++;
+                    
+                    if (bounceCount >= BOUNCES_PER_LINE) {
+                        bounceCount = 0;
+                        if (lyrics.length > 0) {
+                            if (currentIndex < lyrics.length - 1) {
+                                currentIndex++;
+                                songLineNumber++;
+                            } else {
+                                // End of song - return to waiting state
+                                waitingForStart = true;
+                                updatePlayButton();
+                            }
+                        }
+                    }
+                }
+            } else if (waitingForStart) {
+                ballY = BALL_HIGH_POSITION;
+            }
+            
+            // ---- Ball Rendering with Beat Highlighting ----
+            const shouldHighlightBall = currentIndex in beatChordWordData && rising && BEAT_NUMBERS.length > 0 &&
+                beatChordWordData[currentIndex].some(([beatNum]) => beatNum === BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length]);
+            
+            ctx.beginPath();
+            ctx.arc(ballCenterX, ballY, ballRadius, 0, 2 * Math.PI);
+            ctx.fillStyle = shouldHighlightBall ? '#00ff00' : '#ee7621';  // Green when highlighting, orange normally
+            ctx.fill();
+            
+            // Continue animation loop
+            requestAnimationFrame(render);
+        }
+        
+        // ==================== INITIALIZATION ====================
+        
+        // Initialize physics, UI, and start main render loop
+        initBallPhysics();
+        updatePlayButton();
+        render();
+        
+        // Make canvas focusable for keyboard events
+        canvas.setAttribute('tabindex', '0');
+        canvas.focus();
+    </script>
+</body>
+</html>

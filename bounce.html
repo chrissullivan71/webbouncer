@@ -165,7 +165,8 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
         R: Restart<br>
         Q/Esc: Quit<br>
         D: Toggle Debug<br><br>
-        <strong>TAPE MACHINE:</strong><br>
+		<strong>TAPE MACHINE:</strong><br>
+		Double-click PLAY or STOP/EJECT to control music<br>
         Forward (green): Play/Pause<br>
         Fast Forward/Rewind: Line skip<br>
         Pause (yellow): Pause toggle<br>
@@ -173,8 +174,11 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
         Record: Debug mode<br>
         Playback Mode (top): Mode cycle<br><br>
         <strong>DRAG:</strong><br>
-        Magnetic tape: Scrub position
+        Magnetic tape: change positionn
     </div>
+
+	<audio id="backgroundMusic" src="The_Visitor.mp3"></audio>
+
     <canvas id="gameCanvas"></canvas>
 
     <script>
@@ -631,10 +635,28 @@ There’s a cricket on the twentieth floor
         const speedLabel = document.getElementById('speedLabel');
         const debugInfo = document.getElementById('debugInfo');
         const debugData = document.getElementById('debugData');
+		const audioElement = document.getElementById('backgroundMusic');
+
+		let musicIsPlaying = false;
+
+		// Track play, pause, and ended events
+		audioElement.addEventListener('play', () => {
+			musicIsPlaying = true;
+			drawMusicEmojis();
+		});
+		audioElement.addEventListener('pause', () => {
+			musicIsPlaying = false;
+			drawMusicEmojis();
+		});
+		audioElement.addEventListener('ended', () => {
+			musicIsPlaying = false;
+			drawMusicEmojis();
+		});		
         
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+			drawMusicEmojis();
         }
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
@@ -888,6 +910,38 @@ There’s a cricket on the twentieth floor
                 ctx.stroke();
             }
         }
+				
+		function drawMusicEmojis() {
+			// Get the playButton's position and size
+			const playButton = document.getElementById('playButton');
+			if (!playButton) return;
+
+			// Get bounding rectangle relative to the viewport
+			const rect = playButton.getBoundingClientRect();
+
+			// Get the canvas bounding rectangle (for offset calculations)
+			const canvasRect = canvas.getBoundingClientRect();
+
+			// Calculate emoji position:
+			// - 24px to the left of the play button's left edge
+			// - Vertically centered relative to the play button
+			// - leaving enough room for all the emojis
+			const emojiX = rect.left - canvasRect.left - (24+150)	;
+			const emojiY = rect.top - canvasRect.top + (rect.height / 2) - 21; // 21 = half of emoji font size (42px)
+
+			// Optional: clear area where emoji is drawn (adjust size as needed)
+			ctx.clearRect(emojiX - 5, emojiY - 5, 60, 60);
+
+			ctx.save();
+			ctx.font = "42px serif";
+			ctx.textBaseline = "top";
+			ctx.textAlign = "left";
+			ctx.fillStyle = musicIsPlaying ? "#ee7621" : "#000";
+			ctx.fillText("🎶🎸", emojiX, emojiY);
+			ctx.restore();
+		}
+		
+		drawMusicEmojis();
         
         loadAssets();
         
@@ -1438,6 +1492,7 @@ There’s a cricket on the twentieth floor
                 resetSong();
                 loadingStatus.style.display = 'none';
                 console.log(`Loaded embedded song: ${songKey}`);
+				drawMusicEmojis();
             } else {
                 loadingStatus.textContent = `Song not found: ${songKey}`;
                 loadingStatus.style.color = '#ff0000';
@@ -1584,7 +1639,31 @@ There’s a cricket on the twentieth floor
             e.preventDefault();
             togglePlayback();
         });
-        
+
+		canvas.addEventListener('dblclick', function(event) {
+			const rect = canvas.getBoundingClientRect();
+
+			const mousePos = [event.clientX - rect.left, event.clientY - rect.top];
+//			const mousePos = {
+//				x: event.clientX - rect.left,
+//				y: event.clientY - rect.top
+//			};
+			const button = checkButtonClick(mousePos, scaledButtonCoords);
+
+			if (button === "forward") {
+				audioElement.currentTime = 0;
+				audioElement.play().catch(function(e) {
+					alert("Music could not be played: " + e.message);
+					console.log(e);
+				});
+				// musicIsPlaying and drawMusicEmojis() will be triggered by event handler above
+			} else if (button === "stop_eject") {
+				audioElement.pause();
+				audioElement.currentTime = 0;
+				// musicIsPlaying and drawMusicEmojis() will be triggered by event handler above
+			}
+		});
+		
         canvas.addEventListener('touchstart', function(e) {
             if (e.touches.length === 1) {
                 const touch = e.touches[0];
@@ -1956,6 +2035,9 @@ There’s a cricket on the twentieth floor
             ctx.arc(ballCenterX, ballY, ballRadius, 0, 2 * Math.PI);
             ctx.fillStyle = shouldHighlightBall ? '#00ff00' : '#ee7621';
             ctx.fill();
+			
+			// draw emojis for audio playing indicator
+			drawMusicEmojis();
             
             requestAnimationFrame(render);
         }
@@ -1975,6 +2057,7 @@ There’s a cricket on the twentieth floor
             initBallPhysics();
             scaleButtonCoords();
         });
+		
     </script>
 </body>
 </html>
