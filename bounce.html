@@ -135,11 +135,18 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             max-width: 300px;
             display: none;
         }
+		
+		.emoji-fill {
+			color: transparent !important;
+			text-shadow: 0 0 0 #000;
+		}
+
     </style>
 </head>
 <body>
-    <select id="songSelector">
+	<select id="songSelector">
         <option value="">Select Song...</option>
+		<option value="Four Strong Winds">Four Strong Winds</option>
         <option value="rainbow">Rainbow Connection</option>
         <option value="dylan">Don't Think Twice, It's All Right</option>
         <option value="The Visitor">The Visitor</option>
@@ -181,9 +188,40 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 
     <canvas id="gameCanvas"></canvas>
 
+	<span id="musicEmojis" style="position:absolute; pointer-events:none; z-index:200; font-size:42px; left:0; top:0;">🎶🎸</span>
+
     <script>
         // Embedded song data with real content
         const embeddedSongs = {
+		    "Four Strong Winds": `Four Strong Winds by Ian Tyson
+4/4
+
+[Verse 1]
+G            C       D       G
+Four strong winds that blow lonely
+1            4       5       1     ZZZ   LL 01
+[Verse 1]
+G            C       D       G
+Seven seas that run high
+1            4       5       1     ZZZ   LL 02
+[Verse 1]
+C            D        G      Em
+All those things that don't change, come what may
+4            5        1      6m    ZZZ   LL 03
+[Verse 1]
+C            D           G
+But our good times are all gone
+4            5           1         ZZZ   LL 04
+[Verse 1]
+C            D           G
+And I'm bound for moving on
+4            5           1         ZZZ   LL 05
+[Chorus]
+C            D             G     Em
+I'll look for you if I'm ever back this way
+4            5             1     6m    ZZZ   LL 06
+`
+,
             rainbow: `The Rainbow Connection  Words and Music by Paul Williams
 3/4
 
@@ -474,11 +512,13 @@ C          G            Am        F                         LL 42
 C           G7              C      C                        LL 43
 (Harmonica break)                                           LL 43
 1           3               5      7    ZZZ                 LL 43
-`
-,
-            "The Visitor": `The Visitor by Chris Sullivan
+`,
+"The Visitor":
+`The Visitor by Chris Sullivan
 4/4
 
+[Intro]{8}
+[Cricket Music 1]{12}
 [Verse 1]
         G          D7       G       G7
 Well he might’ve arrived by courier 
@@ -495,22 +535,23 @@ He prob’ly took the elevator
        Am                D7
 No one knows, and nobody cares
        1          3      5                      ZZZ         LL 04
-[Chorus]
+[Chorus 1]
           G              D7        G       G7 
 There’s a cricket on the twentieth floor 
           1              3         5       7    ZZZ         LL 05
-[Chorus]
+[Chorus 1]
         C        D7     G            G7
 You can hear him in the men’s room
         1        3      5            7          ZZZ         LL 06
-[Chorus]
+[Chorus 1] 
      C         D7       Bm    Em 
 It’s not about peace or war 
      1         3        5     7                 ZZZ         LL 08
-[Chorus]
+[Chorus 1]
           Am             D7        G
 There’s a cricket on the twentieth floor
           1              3         5            ZZZ         LL 09
+[Cricket Music 2]{12}
 [Verse 2]
    G           D7      G       G7
 He started his legs to singin 
@@ -527,22 +568,23 @@ When the heating season came
    Am                     D7
 He figured it was time to mate now
    1              3       5                     ZZZ         LL 13
-[Chorus]
+[Chorus 2]
           G              D7        G       G7 
 There’s a cricket on the twentieth floor 
           1              3         5       7    ZZZ         LL 14
-[Chorus]
+[Chorus 2]
         C        D7     G            G7
 You can hear him in the men’s room
         1        3      5            7          ZZZ         LL 15
-[Chorus]
+[Chorus 2]
      C         D7       Bm    Em 
 It’s not about peace or war 
      1         3        5     7                 ZZZ         LL 16
-[Chorus]
+[Chorus 2]
           Am             D7        G 
 There’s a cricket on the twentieth floor
           1              3         5            ZZZ         LL 17
+[Cricket Music 3]{12}
 [Verse 3]
    G                   D7      G        G7
 He thinks she’s playin hard to get 
@@ -559,39 +601,39 @@ But she’s twenty one floors below
           Am              D7
 Where the people do their shoppin’
           1      3        5                     ZZZ         LL 21
-[Bridge]
+[Bridge 1]
        Bm               Em
 Out of place and out of time 
        1         3      5                       ZZZ         LL 22
-[Bridge]
+[Bridge 1]
        Bm                   Em
 Out of sight and out of his mind
        1         3          5                   ZZZ         LL 23
-[Bridge]
+[Bridge 1]
        C        D7          Bm       Em
 It’s a bit of a shame and a bit of a sin 
        1        3           5        7          ZZZ         LL 24
-[Bridge]
+[Bridge 1]
         Am                     D7
 Neither one of us knows what a scrape we’re in
         1         3            5            7   ZZZ         LL 25
-[Chorus]
+[Instrumental Chorus]
           G              D7        G       G7 
 There’s a cricket on the twentieth floor 
           1              3         5       7    ZZZ         LL 26
-[Chorus]
+[Instrumental Chorus]
         C        D7     G            G7
 You can hear him in the men’s room
         1        3      5            7          ZZZ         LL 27
-[Chorus]
+[Instrumental Chorus]
      C         D7       Bm    Em 
 It’s not about peace or war 
      1         3        5     7                 ZZZ         LL 28
-[Chorus]
+[Instrumental Chorus]
           Am             D7        G
 There’s a cricket on the twentieth floor
           1              3         5            ZZZ         LL 29
-Verse 4]
+[Verse 4]
         G               D7          G       G7
 Haven’t heard him for a week now or more 
         1               3           5       7   ZZZ         LL 30
@@ -607,24 +649,45 @@ Must have given up and gone before
       Am                     D7
 Kinda miss that song that he played
       1         3            5                  ZZZ         LL 33
-[Chorus]
+[Bridge 2]
+       Bm               Em
+Out of place and out of time 
+       1         3      5                       ZZZ         LL 22
+[Bridge 2]
+       Bm                   Em
+Out of sight and out of his mind
+       1         3          5                   ZZZ         LL 23
+[Bridge 2]
+       C        D7          Bm       Em
+It’s a bit of a shame and a bit of a sin 
+       1        3           5        7          ZZZ         LL 24
+[Bridge 2]
+        Am                     D7
+Neither one of us knows what a scrape we’re in
+        1         3            5            7   ZZZ         LL 25
+[Chorus 4]
           G              D7        G       G7 
 There’s a cricket on the twentieth floor 
           1              3         5       7    ZZZ         LL 36
-[Chorus]
+[Chorus 4]
         C        D7     G            G7
 You can hear him in the men’s room
         1        3      5            7          ZZZ         LL 37
-[Chorus]
+[Chorus 4]
      C         D7       Bm    Em 
 It’s not about peace or war 
      1         3        5     7                 ZZZ         LL 38
-[Chorus]
+[Chorus 4]
           Am             D7        G
 There’s a cricket on the twentieth floor
           1              3         5            ZZZ         LL 39
+[Outtro]
+[long cricket music]
 `
     };
+
+
+
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -637,19 +700,23 @@ There’s a cricket on the twentieth floor
         const debugData = document.getElementById('debugData');
 		const audioElement = document.getElementById('backgroundMusic');
 
-		let musicIsPlaying = false;
+		// let musicIsPlaying = false;
+		function isAudioActuallyPlaying() {
+			return !audioElement.paused && !audioElement.ended && audioElement.currentTime > 0;
+		}		
 
 		// Track play, pause, and ended events
 		audioElement.addEventListener('play', () => {
-			musicIsPlaying = true;
+//			musicIsPlaying = true;
+//			ctx.fillStyle = isAudioActuallyPlaying() ? "#00cc44" : "#555";			
+			document.getElementById('musicEmojis').classList.remove('emoji-fill');
 			drawMusicEmojis();
 		});
+		
 		audioElement.addEventListener('pause', () => {
-			musicIsPlaying = false;
-			drawMusicEmojis();
-		});
-		audioElement.addEventListener('ended', () => {
-			musicIsPlaying = false;
+//			musicIsPlaying = false;
+//			ctx.fillStyle = isAudioActuallyPlaying() ? "#00cc44" : "#555";			
+			document.getElementById('musicEmojis').classList.add('emoji-fill');
 			drawMusicEmojis();
 		});		
         
@@ -914,33 +981,25 @@ There’s a cricket on the twentieth floor
 		function drawMusicEmojis() {
 			// Get the playButton's position and size
 			const playButton = document.getElementById('playButton');
-			if (!playButton) return;
+			const emojiSpan = document.getElementById('musicEmojis');
+
+			if (!playButton || !emojiSpan) return;
 
 			// Get bounding rectangle relative to the viewport
 			const rect = playButton.getBoundingClientRect();
-
-			// Get the canvas bounding rectangle (for offset calculations)
 			const canvasRect = canvas.getBoundingClientRect();
 
 			// Calculate emoji position:
 			// - 24px to the left of the play button's left edge
 			// - Vertically centered relative to the play button
 			// - leaving enough room for all the emojis
-			const emojiX = rect.left - canvasRect.left - (24+150)	;
-			const emojiY = rect.top - canvasRect.top + (rect.height / 2) - 21; // 21 = half of emoji font size (42px)
+			const emojiX = rect.left - canvasRect.left - (24+150);
+			const emojiY = rect.top - canvasRect.top + (rect.height / 2) - 21;
 
-			// Optional: clear area where emoji is drawn (adjust size as needed)
-			ctx.clearRect(emojiX - 5, emojiY - 5, 60, 60);
-
-			ctx.save();
-			ctx.font = "42px serif";
-			ctx.textBaseline = "top";
-			ctx.textAlign = "left";
-			ctx.fillStyle = musicIsPlaying ? "#ee7621" : "#000";
-			ctx.fillText("🎶🎸", emojiX, emojiY);
-			ctx.restore();
+			emojiSpan.style.left = `${emojiX}px`;
+			emojiSpan.style.top = `${emojiY}px`;
 		}
-		
+
 		drawMusicEmojis();
         
         loadAssets();
@@ -956,7 +1015,7 @@ There’s a cricket on the twentieth floor
         const speedValues = [1.0, 1.25, 1.5, 1.75, 2.0];
         const speedLabels = ["1.0x", "1.25x", "1.5x", "1.75x", "2.0x"];
         let currentSpeedIndex = 0;
-        const BASE_BOUNCE_DURATION = 1.625;
+        const BASE_BOUNCE_DURATION = .84375;
         
         speedSlider.addEventListener('input', function() {
             currentSpeedIndex = parseInt(speedSlider.value);
@@ -1370,6 +1429,15 @@ There’s a cricket on the twentieth floor
             return [4, 4];
         }
         
+		<!-- Key revision: Now detects {N} in section headers and sets per-section bounce counts. -->
+        function getSectionBounceCount(sectionHeader, defaultBounceCount) {
+            const match = sectionHeader.match(/\{(\d+)\}/);
+            if (match) {
+                return parseInt(match[1], 10);
+            }
+            return defaultBounceCount;
+        }
+
         function processSongData(data) {
             const lines = data.split('\n').filter(line => line.trim());
             
@@ -1400,6 +1468,8 @@ There’s a cricket on the twentieth floor
             lyrics = [];
             beats = [];
             beatChordWordData = {};
+
+            sectionBounceCounts = []; // Reset for new song
             
             for (let i = 0; i < remainingLines.length; i++) {
                 const line = remainingLines[i];
@@ -1407,6 +1477,12 @@ There’s a cricket on the twentieth floor
                 
                 if (lineType === "sections") {
                     sections.push(line);
+                    // --- NEW: set bounce count for this section ---
+                    // assume default is BOUNCES_PER_LINE * 1 line per section header.
+                    // If you want to count lyric lines per section, you can enhance this logic.
+                    const defaultBounceCount = BOUNCES_PER_LINE; // or customize as needed
+                    const bounceCount = getSectionBounceCount(line, defaultBounceCount);
+                    sectionBounceCounts.push(bounceCount);
                 } else if (lineType === "chords") {
                     chords.push(line);
                 } else if (lineType === "lyrics") {
@@ -1478,6 +1554,8 @@ There’s a cricket on the twentieth floor
                 loadingStatus.textContent = 'Loading Rainbow Connection...';
             } else if (songKey === 'dylan') {
                 loadingStatus.textContent = 'Loading Don\'t Think Twice...';	
+            } else if (songKey === 'Four Strong Winds') {
+                loadingStatus.textContent = 'Loading Four Strong Winds...';	
             } else if (songKey === 'The Visitor') {
                 loadingStatus.textContent = 'Loading The Visitor...';
             } else {
@@ -1651,16 +1729,19 @@ There’s a cricket on the twentieth floor
 			const button = checkButtonClick(mousePos, scaledButtonCoords);
 
 			if (button === "forward") {
+				document.getElementById('musicEmojis').classList.remove('emoji-fill');
 				audioElement.currentTime = 0;
 				audioElement.play().catch(function(e) {
 					alert("Music could not be played: " + e.message);
 					console.log(e);
 				});
-				// musicIsPlaying and drawMusicEmojis() will be triggered by event handler above
+				// Emoji color now updates based on actual audio state using isAudioActuallyPlaying()
+
 			} else if (button === "stop_eject") {
 				audioElement.pause();
 				audioElement.currentTime = 0;
-				// musicIsPlaying and drawMusicEmojis() will be triggered by event handler above
+				document.getElementById('musicEmojis').classList.add('emoji-fill');
+				// Emoji color now updates based on actual audio state using isAudioActuallyPlaying()
 			}
 		});
 		
