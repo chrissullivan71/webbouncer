@@ -188,9 +188,10 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 
     <canvas id="gameCanvas"></canvas>
 
-	<span id="musicEmojis" style="position:absolute; pointer-events:none; z-index:200; font-size:42px; left:0; top:0;">🎶🎸</span>
+	<span id="musicEmojis" class="emoji-fill" style="position:absolute; pointer-events:none; z-index:200; font-size:42px; left:0; top:0;">🎶🎸</span>
 
-    <script>
+	<script>
+	
         // Embedded song data with real content
         const embeddedSongs = {
 		    "Four Strong Winds": `Four Strong Winds by Ian Tyson
@@ -728,7 +729,7 @@ There’s a cricket on the twentieth floor
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
         
-        const ASSET_BASE_URL = 'https://1eyedogbreath.github.io/webbouncer/';
+        const ASSET_BASE_URL = 'https://chrissullivan71.github.io/webbouncer/';
         let backgroundImage = null;
         let controlsImage = null;
         let magTapeImage = null;
@@ -1693,31 +1694,73 @@ There’s a cricket on the twentieth floor
             }
         });
         
-        // Canvas click/touch controls
-        canvas.addEventListener('click', function(e) {
-            const rect = canvas.getBoundingClientRect();
-            const mousePos = {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top
-            };
-            
-            // Check if clicking on controls image first
-            if (Object.keys(scaledButtonCoords).length > 0 && handleControlsClick(mousePos)) {
-                return; // Controls handled the click
-            }
-            
-            // Check if clicking on progress indicator
-            if (isInProgressIndicator(mousePos.x, mousePos.y)) {
-                isDragging = true;
-                handleProgressDrag(e.clientX, e.clientY);
-                return;
-            }
-            
-            // Otherwise, general play/pause
-            e.preventDefault();
-            togglePlayback();
-        });
+		// Canvas click handler: Ctrl+Click for music, normal click for teleprompter
 
+		canvas.addEventListener('click', function(e) {
+			const rect = canvas.getBoundingClientRect();
+
+			// Ctrl+Click: MUSIC/EMOJI CONTROL ONLY
+			if (e.ctrlKey) {
+				const mousePos = [e.clientX - rect.left, e.clientY - rect.top];
+				const button = checkButtonClick(mousePos, scaledButtonCoords);
+
+				if (button === "forward") {
+					audioElement.play().catch(function(err) {
+						alert("Music could not be played: " + err.message);
+						console.log(err);
+					});
+					return;
+				} else if (button === "pause") {
+					// Toggle music pause/play
+					if (audioElement.paused) {
+						audioElement.play().catch(function(err) {
+							alert("Music could not be played: " + err.message);
+							console.log(err);
+						});
+					} else {
+						audioElement.pause();
+					}
+					return;
+				} else if (button === "stop_eject") {
+					audioElement.pause();
+					audioElement.currentTime = 0;
+					return;
+				}
+				// If Ctrl+Click but not on a music control, fall through to normal click logic.
+			}
+
+			// NORMAL CLICK: teleprompter/animation as before
+			const mousePos = {
+				x: e.clientX - rect.left,
+				y: e.clientY - rect.top
+			};
+
+			// Check if clicking on controls image (for lyric animation)
+			if (Object.keys(scaledButtonCoords).length > 0 && handleControlsClick(mousePos)) {
+				return;
+			}
+
+			// Check if clicking on progress indicator
+			if (isInProgressIndicator(mousePos.x, mousePos.y)) {
+				isDragging = true;
+				handleProgressDrag(e.clientX, e.clientY);
+				return;
+			}
+
+			// Otherwise, general play/pause for teleprompter
+			e.preventDefault();
+			togglePlayback();
+		});
+
+		// Emoji color: follow music state
+		audioElement.addEventListener('play', () => {
+			document.getElementById('musicEmojis').classList.remove('emoji-fill');
+			drawMusicEmojis();
+		});
+		audioElement.addEventListener('pause', () => {
+			document.getElementById('musicEmojis').classList.add('emoji-fill');
+			drawMusicEmojis();
+		});
 		canvas.addEventListener('dblclick', function(event) {
 			const rect = canvas.getBoundingClientRect();
 
