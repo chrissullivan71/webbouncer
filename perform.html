@@ -140,7 +140,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 			color: transparent !important;
 			text-shadow: 0 0 0 #000;
 		}
-
+		
     </style>
 </head>
 <body>
@@ -160,7 +160,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
         <input type="range" id="speedSlider" min="0" max="4" value="0" step="1">
         <div id="speedLabel">Speed: 1.0x</div>
     </div>
-
+	
     <div id="debugInfo">
         <div>DEBUG MODE ACTIVE</div>
         <div id="debugData"></div>
@@ -192,7 +192,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 
 	<script>
 	
-        // Embedded song data with real content
+   // Embedded song data with real content
         const embeddedSongs = {
 		    "Four Strong Winds": `Four Strong Winds by Ian Tyson
 4/4
@@ -686,9 +686,26 @@ There’s a cricket on the twentieth floor
 [long cricket music]
 `
     };
+		const assetStatus = {
+			tape_deck: "grey",
+			mag_tape: "grey",
+			background: "grey",
+			song: "grey"
+		};
 
+		const assetLabels = {
+			tape_deck: "tape deck",
+			mag_tape: "mag tape",
+			background: "background",
+			song: "song"
+		};
 
-
+		const songFileMap = {
+		  "Four Strong Winds": null, // no file, only embed
+		  "rainbow": "williams-ascher-rainbow-connection.txt",
+		  "dylan": "dont_think_twice.txt",
+		  "The Visitor": "the_Visitor2.txt"
+		};
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -733,7 +750,6 @@ There’s a cricket on the twentieth floor
         let backgroundImage = null;
         let controlsImage = null;
         let magTapeImage = null;
-        let iconImage = null;
 
         // Tape machine button coordinates (from Python version)
         const ORIGINAL_CONTROLS_SIZE = {width: 2040, height: 3708};
@@ -750,54 +766,15 @@ There’s a cricket on the twentieth floor
         let scaledButtonCoords = {};
         let playbackMode = "normal"; // normal, playback_idle, playback_active
         let debugMode = false;
-        
-        function loadAssets() {
-            const loadingStatus = document.getElementById('loadingStatus');
-            let loadedCount = 0;
-            
-            function checkComplete() {
-                loadedCount++;
-                if (loadedCount === 4) {
-                    console.log('All assets loaded');
-                    scaleButtonCoords();
-                }
-            }
-            
-            backgroundImage = new Image();
-            backgroundImage.onload = checkComplete;
-            backgroundImage.onerror = () => {
-                console.log('Background image failed to load');
-                checkComplete();
-            };
-            backgroundImage.src = ASSET_BASE_URL + 'background.jpg';
-            
-            controlsImage = new Image();
-            controlsImage.onload = () => {
-                scaleButtonCoords();
-                checkComplete();
-            };
-            controlsImage.onerror = () => {
-                console.log('Controls image failed to load');
-                checkComplete();
-            };
-            controlsImage.src = ASSET_BASE_URL + 'controls.jpg';
-            
-            magTapeImage = new Image();
-            magTapeImage.onload = checkComplete;
-            magTapeImage.onerror = () => {
-                console.log('Mag tape image failed to load');
-                checkComplete();
-            };
-            magTapeImage.src = ASSET_BASE_URL + 'magtape.jpg';
-            
-            iconImage = new Image();
-            iconImage.onload = checkComplete;
-            iconImage.onerror = () => {
-                console.log('Icon image failed to load');
-                checkComplete();
-            };
-            iconImage.src = ASSET_BASE_URL + 'icon.png';
-        }
+      
+		function setColoredBallStatus(asset, status) {
+		  const colored_ball = document.getElementById('colored_ball-' + asset);
+		  if (!colored_ball) return;
+		  colored_ball.className = 'colored_ball ' + status;
+		}
+
+		// Initialize all colored balls to grey at page load
+		['tape_deck','mag_tape','background','song'].forEach(asset => setColoredBallStatus(asset, 'grey'));
 
         function scaleButtonCoordinates(originalCoords, originalImageSize, scaledImageSize) {
             const scaleX = scaledImageSize.width / originalImageSize.width;
@@ -1002,8 +979,6 @@ There’s a cricket on the twentieth floor
 		}
 
 		drawMusicEmojis();
-        
-        loadAssets();
         
         const POSITION_TITLE = 120;
         const POSITION_TIME_SIGNATURE = 150;
@@ -1450,7 +1425,9 @@ There’s a cricket on the twentieth floor
             const [beatsPerMeasure, noteValue] = parseTimeSignature(timeSignatureStr);
             
             // Set bounces per line and bounce duration based on time signature and song
-            if (beatsPerMeasure === 3) {      // 3/4 time (Rainbow Connection)
+			// debugger;;
+
+		   if (beatsPerMeasure === 3) {      // 3/4 time (Rainbow Connection)
                 BOUNCES_PER_LINE = 4;
                 BOUNCE_DURATION = BASE_BOUNCE_DURATION;
             } else {                          // 4/4 time (Don't Think Twice)
@@ -1534,49 +1511,149 @@ There’s a cricket on the twentieth floor
             songData.title = title;
             songData.timeSignature = timeSignatureStr;
         }
-        
-        // Song selection handler
-        songSelector.addEventListener('change', function(e) {
-            const songKey = e.target.value;
-            if (!songKey) {
-                document.getElementById('loadingStatus').textContent = 'Select a song to begin...';
-                return;
-            }
-            
-            loadEmbeddedSong(songKey);
-        });
-        
-        // Load embedded song function
-        function loadEmbeddedSong(songKey) {
-            const loadingStatus = document.getElementById('loadingStatus');
-            currentSongKey = songKey;
-            
-            if (songKey === 'rainbow') {
-                loadingStatus.textContent = 'Loading Rainbow Connection...';
-            } else if (songKey === 'dylan') {
-                loadingStatus.textContent = 'Loading Don\'t Think Twice...';	
-            } else if (songKey === 'Four Strong Winds') {
-                loadingStatus.textContent = 'Loading Four Strong Winds...';	
-            } else if (songKey === 'The Visitor') {
-                loadingStatus.textContent = 'Loading The Visitor...';
-            } else {
-                loadingStatus.textContent = 'Unknown song selection';
-                return;
-            }
-            
-            const songText = embeddedSongs[songKey];
-            if (songText) {
-                processSongData(songText);
-                initBallPhysics();
-                resetSong();
-                loadingStatus.style.display = 'none';
-                console.log(`Loaded embedded song: ${songKey}`);
-				drawMusicEmojis();
-            } else {
-                loadingStatus.textContent = `Song not found: ${songKey}`;
-                loadingStatus.style.color = '#ff0000';
-            }
-        }
+
+				// 1. Helper: Determine asset source based on ?a
+		function getAssetSource(assetFile) {
+			const params = new URLSearchParams(window.location.search);
+			const aParam = params.get('a');
+			if (!aParam) {
+				// Default: Pages
+				return ASSET_BASE_URL + assetFile;
+			} else if (aParam === 'local') {
+				// Local
+				return '/a/' + assetFile;
+			} else if (aParam.startsWith('http')) {
+				// External URL
+				return aParam + assetFile;
+			}
+		}
+
+		// Returns a status color string expected elsewhere: "green", "orange", "purple", "pink", "grey", "black"
+		function getAssetColor(assetFile, aParam) {
+			if (!aParam) return "green";         // default (Pages)
+			if (aParam === "local") return "orange";
+			if (typeof aParam === "string" && aParam.startsWith("http")) return "purple";
+			return "grey";
+		}
+
+		function loadAssetsAndSong(songKey) {
+		  // Reset all balls to grey
+
+//		  debugger;		 
+
+		  assetStatus.tape_deck = "grey";
+		  assetStatus.mag_tape = "grey";
+		  assetStatus.background = "grey";
+		  assetStatus.song = "grey";
+
+		  const params = new URLSearchParams(window.location.search);
+		  const aParam = params.get('a');
+
+		  const images = [
+			{ name: 'tape_deck', file: 'controls.jpg' },
+			{ name: 'mag_tape', file: 'magtape.jpg' },
+			{ name: 'background', file: 'background.jpg' }
+		  ];
+
+		  let i = 0;
+		  function loadNextImage() {
+			if (i >= images.length) {
+			  // Only try song if ALL images succeeded
+			  if (
+				assetStatus.tape_deck !== "black" &&
+				assetStatus.mag_tape !== "black" &&
+				assetStatus.background !== "black"
+			  ) {
+				loadSongAsset(songKey, aParam);
+			  }
+			  return;
+			}
+			const img = new Image();
+			img.onload = function() {
+			  // debugger;;
+			  // Pick color according to source (green/orange/purple)
+			  assetStatus[images[i].name] = getAssetColor(images[i].file, aParam); 
+			  drawAssetStatusBallsOnCanvas();
+			  if(images[i].name==='tape_deck')controlsImage=img;else if(images[i].name==='mag_tape')magTapeImage=img;else if(images[i].name==='background')backgroundImage=img;
+			  i++;
+			  loadNextImage();
+			};
+			img.onerror = function() {
+			  // debugger;;
+			  assetStatus[images[i].name] = "black";
+			  drawAssetStatusBallsOnCanvas();
+			  alert(`Error loading ${images[i].file}`);
+			  // STOP. Do not try song.
+			};
+			img.src = getAssetSource(images[i].file, aParam); // your asset source selector
+		  }
+		  loadNextImage();
+		}
+		// 3. Loader: Song, with embedded fallback
+		function loadSongAsset(songKey, aParam) {
+		  // Only try if all images succeeded (no black balls)
+		  // debugger;;
+		  if (
+			assetStatus.tape_deck === "black" ||
+			assetStatus.mag_tape === "black" ||
+			assetStatus.background === "black"
+		  ) {
+			assetStatus.song = "grey";
+			drawAssetStatusBallsOnCanvas();
+			return;
+		  }
+
+		  // Determine source order for song
+		  let color = getAssetColor(songFileMap[songKey], aParam);
+		  const fileName = songFileMap[songKey];
+
+		  if (fileName) {
+			const src = getAssetSource(fileName, aParam);
+			fetch(src)
+			  .then(res => res.ok ? res.text() : Promise.reject())
+			  .then(text => {
+				assetStatus.song = color;
+				drawAssetStatusBallsOnCanvas();
+				processSongData(text);
+			  })
+			  .catch(() => {
+				// Fallback to embed
+				if (embeddedSongs[songKey]) {
+				  assetStatus.song = "pink";
+				  drawAssetStatusBallsOnCanvas();
+				  processSongData(embeddedSongs[songKey]);
+				} else {
+				  assetStatus.song = "black";
+				  drawAssetStatusBallsOnCanvas();
+				  alert('ERROR: Song could not be loaded from any source.');
+				}
+			  });
+		  } else {
+			// No file, try embed directly
+			if (embeddedSongs[songKey]) {
+			  assetStatus.song = "pink";
+			  drawAssetStatusBallsOnCanvas();
+			  processSongData(embeddedSongs[songKey]);
+			} else {
+			  assetStatus.song = "black";
+			  drawAssetStatusBallsOnCanvas();
+			  alert('ERROR: Song could not be loaded from any source.');
+			}
+		  }
+		}
+		
+		songSelector.addEventListener('change', function(e) {
+			const songKey = e.target.value;
+			if (!songKey) {
+				document.getElementById('loadingStatus').textContent = 'Select a song to begin...';
+				return;
+			}
+			document.getElementById('loadingStatus').textContent = 'Loading ' + songKey + '...';
+			currentSongKey = songKey;
+		    // debugger;;
+			loadAssetsAndSong(songKey);
+		});
+      
         
         function interpolateColor(color1, color2, factor) {
             const r = Math.floor(color1[0] + (color2[0] - color1[0]) * factor);
@@ -1944,7 +2021,9 @@ There’s a cricket on the twentieth floor
             ctx.fillStyle = '#1e1e1e';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Draw background
+			drawAssetStatusBallsOnCanvas();
+			
+			// Draw background
             if (backgroundImage && backgroundImage.complete && backgroundImage.naturalWidth > 0) {
                 ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
             }
@@ -2182,6 +2261,59 @@ There’s a cricket on the twentieth floor
             scaleButtonCoords();
         });
 		
+		function drawAssetStatusBallsOnCanvas() {
+			const assets = [
+				{ key: 'tape_deck', label: 'tape_deck' },
+				{ key: 'mag_tape', label: 'mag tape' },
+				{ key: 'background', label: 'background' },
+				{ key: 'song', label: 'song' }
+			];
+
+			const statusColors = {
+				grey: "#cccccc",
+				green: "#2ecc40",
+				orange: "#ff9800",
+				purple: "#a020f0",
+				pink: "#ff69b4",
+				black: "#222222"
+			};
+
+			// Placement: adjust these values as needed for your UI
+			const baseY = 110;    // Vertical position (just below speed slider)
+			const baseX = 180;    // Starting horizontal position
+			const spacing = 95;   // Space between balls (for full labels)
+			const radius = 14;    // Ball radius
+
+			assets.forEach((asset, i) => {
+				let colored_ball = document.getElementById('colored_ball-' + asset.key);
+				let status = "grey";
+				if (colored_ball) {
+					let classes = colored_ball.className.split(" ");
+					status = classes[classes.length - 1];
+				}
+				let color = statusColors[status] || "#cccccc";
+				let x = baseX + i * spacing;
+				let y = baseY;
+
+				// Draw the ball
+				ctx.beginPath();
+				ctx.arc(x, y, radius, 0, 2 * Math.PI);
+				ctx.fillStyle = color;
+				ctx.fill();
+				ctx.strokeStyle = "#444";
+				ctx.lineWidth = 2;
+				ctx.stroke();
+
+				// Draw the label below the ball
+				ctx.font = "bold 14px Courier New";
+				ctx.fillStyle = "#fff";
+				ctx.textAlign = "center";
+				ctx.fillText(asset.label, x, y + radius + 18);
+			});
+
+			ctx.textAlign = "left"; // Reset for other rendering
+		}
+
     </script>
 </body>
 </html>

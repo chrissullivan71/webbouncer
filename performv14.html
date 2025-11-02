@@ -4,7 +4,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 -->
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8m>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bouncing Ball Teleprompter (BBT)</title>
     <style>
@@ -76,6 +76,45 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             border-color: #ff8800;
         }
         
+		#listenButton,
+		#playListenButton {
+			position: absolute;
+			z-index: 100;
+			background: rgba(0,200,0,0.8);
+			color: white;
+			border: 2px solid #00ff00;
+			padding: 10px 20px;        /* same height as #playButton */
+			font-size: 16px;           /* same size as #playButton */
+			font-weight: bold;
+			cursor: pointer;
+			border-radius: 5px;
+			font-family: 'Courier New', monospace;
+			white-space: nowrap;
+			text-align: center;
+			/* default placement (absolute) — visible before any JS runs */
+			right: 140px;              /* sits left of the existing right:10px Play/Reset */
+		}
+		
+		#listenButton {
+			top: 10px;                 /* same vertical position as Play button */
+		}
+		
+		#playListenButton {
+			top: 60px;                 /* same vertical position as Reset button */
+		}
+
+		/* Match Play hover / paused visuals */
+		#listenButton:hover,
+		#playListenButton:hover {
+			background: rgba(0,255,0,0.9);
+		}
+		
+		#listenButton.paused,
+		#playListenButton.paused {
+			background: rgba(200,100,0,0.8);
+			border-color: #ff8800;
+		}
+		
         #restartButton {
             position: absolute;
             top: 60px;
@@ -141,7 +180,6 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 			text-shadow: 0 0 0 #000;
 		}
 
-		I-ONLY Play & Start buttons (paste immediately after <canvas id="gameCanvas">) -->
 		<style>
 </style>
 		
@@ -155,6 +193,9 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
         <option value="The Visitor">The Visitor</option>
     </select>
     <div id="loadingStatus">Select a song to begin...</div>
+
+	<button id="listenButton" aria-label="Listen" title="Listen">▶ LISTEN</button><button id="playListenButton" aria-label="Play & Listen" title="Play & Listen">▶ PLAY&LISTEN</button>
+
     <button id="playButton">▶ PLAY</button>
     <button id="restartButton">↻ RESET</button>
     
@@ -190,11 +231,11 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 	<audio id="backgroundMusic" src="The_Visitor.mp3"></audio>
 
     <canvas id="gameCanvas"></canvas>
-
-	<span id="musicEmojis" class="emoji-fill" style="position:absolute; pointer-events:none; z-index:200; font-size:42px; left:0; top:0;">🎶🎸</span>
-
-	<script>
 	
+	<span id="musicEmojis" class="emoji-fill" style="position:absolute; pointer-events:none; z-index:200; font-size:42px; left: calc(20px + ((100vh / 3 + 72px) * 0.544768) + 3mm); bottom: calc(20px + 6px);">🎶🎸</span>
+
+<script>
+
    // Embedded song data with real content
         const embeddedSongs = {
 		    "Four Strong Winds": `Four Strong Winds by Ian Tyson
@@ -958,28 +999,68 @@ There’s a cricket on the twentieth floor
                 ctx.stroke();
             }
         }
-				
-		function drawMusicEmojis() {
-			// Get the playButton's position and size
-			const playButton = document.getElementById('playButton');
-			const emojiSpan = document.getElementById('musicEmojis');
 
-			if (!playButton || !emojiSpan) return;
+		// drawMusicEmojis() — places emojis a few mm to the right of controls.jpg (aligned to controls bottom)
+		// Uses the measured controls width 2020 / height 3708
+		function drawMusicEmojis() {
+			var emojiSpan = document.getElementById('musicEmojis');
+			if (!emojiSpan || !canvas) return;
+
+			var GAP_MM = 3;
+			var PX_PER_MM = 96.0 / 25.4;
+			var gapPx = Math.round(GAP_MM * PX_PER_MM);
+			var VERT_NUDGE_PX = 6;
+
+			// Use canvas layout math (no need to wait for controlsImage)
+			var controlsHeight = canvas.height / 3 + 72;
+			var controlsX = 20;
+			var controlsY = Math.round(canvas.height - controlsHeight - 20);
+
+			// exact aspect ratio from your measured image width (2020) and height (3708)
+			var CONTROLS_ASPECT = 2020 / 3708; // = 0.544768...
+			var controlsWidth = Math.round(controlsHeight * CONTROLS_ASPECT);
+
+			var canvasRect = canvas.getBoundingClientRect();
+			var emojiRect = emojiSpan.getBoundingClientRect();
+
+			// If emoji hasn't been measured yet, guess using font-size fallback
+			if (!emojiRect.width || !emojiRect.height) {
+				emojiRect = { width: 42 * 2, height: 42 }; // fallback guess (approx)
+			}
+
+			var controlsLeftPage = Math.round(canvasRect.left + window.scrollX + controlsX);
+			var controlsBottomPage = Math.round(canvasRect.top + window.scrollY + controlsY + controlsHeight);
+
+			var left = controlsLeftPage + controlsWidth + gapPx;
+			var top  = controlsBottomPage - emojiRect.height - VERT_NUDGE_PX;
+
+			emojiSpan.style.position = 'absolute';
+			emojiSpan.style.left = Math.max(2, left) + 'px';
+			emojiSpan.style.top  = Math.max(2, top) + 'px';
+			emojiSpan.style.pointerEvents = 'none';
+		}
+
+//		function drawMusicEmojis() {
+			// Get the playButton's position and size
+//			const playButton = document.getElementById('playButton');
+//			const emojiSpan = document.getElementById('musicEmojis');
+
+//			if (!playButton || !emojiSpan) return;
 
 			// Get bounding rectangle relative to the viewport
-			const rect = playButton.getBoundingClientRect();
-			const canvasRect = canvas.getBoundingClientRect();
+//			const rect = playButton.getBoundingClientRect();
+//			const canvasRect = canvas.getBoundingClientRect();
 
 			// Calculate emoji position:
 			// - 24px to the left of the play button's left edge
 			// - Vertically centered relative to the play button
 			// - leaving enough room for all the emojis
-			const emojiX = rect.left - canvasRect.left - (24+150);
-			const emojiY = rect.top - canvasRect.top + (rect.height / 2) - 21;
+//			const emojiX = rect.left - canvasRect.left - (24+150);
+//			const emojiY = rect.top - canvasRect.top + (rect.height / 2) - 21;
 
-			emojiSpan.style.left = `${emojiX}px`;
-			emojiSpan.style.top = `${emojiY}px`;
-		}
+//			emojiSpan.style.left = `${emojiX}px`;
+//			emojiSpan.style.top = `${emojiY}px`;
+//		}
 
 		drawMusicEmojis();
         
@@ -1990,6 +2071,19 @@ There’s a cricket on the twentieth floor
             }
         });
 
+       // Mouse drag events
+        canvas.addEventListener('mousedown', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (isInProgressIndicator(x, y)) {
+                isDragging = true;
+                handleProgressDrag(e.clientX, e.clientY);
+                e.preventDefault();
+            }
+        });
+
         document.addEventListener('mousemove', function(e) {
             if (isDragging) {
                 handleProgressDrag(e.clientX, e.clientY);
@@ -2002,8 +2096,8 @@ There’s a cricket on the twentieth floor
                 isDragging = false;
                 e.preventDefault();
             }
-        });
-           
+        });                                     
+
         // Touch drag events
         document.addEventListener('touchmove', function(e) {
             if (isDragging && e.touches.length === 1) {
@@ -2370,6 +2464,61 @@ There’s a cricket on the twentieth floor
 			// restore alignment
 			ctx.textAlign = "left";
 		}		
+
+		(function() {
+			// Defensive init after DOM is ready
+			function initUnarmedButtons() {
+				var playBtn = document.getElementById('playButton'); // used only for reference if needed
+				var listenBtn = document.getElementById('listenButton');
+				var playListenBtn = document.getElementById('playListenButton');
+
+				if (!listenBtn && !playListenBtn) return;
+
+				// remember original labels
+				if (listenBtn && !listenBtn.dataset.orig) listenBtn.dataset.orig = listenBtn.textContent || '▶ LISTEN';
+				if (playListenBtn && !playListenBtn.dataset.orig) playListenBtn.dataset.orig = playListenBtn.textContent || '▶ PLAY&LISTEN';
+
+				function setPlayingVisual(btn) {
+					if (!btn) return;
+					btn.classList.remove('paused');
+					btn.textContent = '⏸ PAUSE';
+				}
+				function setPausedVisual(btn) {
+					if (!btn) return;
+					btn.classList.add('paused');
+					btn.textContent = btn.dataset.orig || '▶';
+				}
+				function toggleVisual(btn) {
+					if (!btn) return;
+					if (btn.classList.contains('paused')) setPlayingVisual(btn);
+					else setPausedVisual(btn);
+				}
+
+				if (listenBtn) {
+					listenBtn.addEventListener('click', function(e) {
+						e.preventDefault();
+						console.log('Listen button pressed — NOT armed.');
+						toggleVisual(listenBtn);
+					});
+					listenBtn.addEventListener('touchstart', function(e) { e.preventDefault(); listenBtn.click(); });
+				}
+
+				if (playListenBtn) {
+					playListenBtn.addEventListener('click', function(e) {
+						e.preventDefault();
+						console.log('Play&Listen button pressed — NOT armed.');
+						toggleVisual(playListenBtn);
+					});
+					playListenBtn.addEventListener('touchstart', function(e) { e.preventDefault(); playListenBtn.click(); });
+				}
+			}
+
+			if (document.readyState === 'loading') {
+				document.addEventListener('DOMContentLoaded', initUnarmedButtons);
+			} else {
+				initUnarmedButtons();
+			}
+		})();
 
     </script>
 </body>
