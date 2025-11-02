@@ -4,7 +4,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 -->
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8m>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bouncing Ball Teleprompter (BBT)</title>
     <style>
@@ -25,7 +25,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             background: #1e1e1e;
             cursor: pointer;
         }
-        
+
         #songSelector {
             position: absolute;
             top: 10px;
@@ -76,6 +76,45 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             border-color: #ff8800;
         }
         
+		#listenButton,
+		#playListenButton {
+			position: absolute;
+			z-index: 100;
+			background: rgba(0,200,0,0.8);
+			color: white;
+			border: 2px solid #00ff00;
+			padding: 10px 20px;        /* same height as #playButton */
+			font-size: 16px;           /* same size as #playButton */
+			font-weight: bold;
+			cursor: pointer;
+			border-radius: 5px;
+			font-family: 'Courier New', monospace;
+			white-space: nowrap;
+			text-align: center;
+			/* default placement (absolute) — visible before any JS runs */
+			right: 140px;              /* sits left of the existing right:10px Play/Reset */
+		}
+		
+		#listenButton {
+			top: 10px;                 /* same vertical position as Play button */
+		}
+		
+		#playListenButton {
+			top: 60px;                 /* same vertical position as Reset button */
+		}
+
+		/* Match Play hover / paused visuals */
+		#listenButton:hover,
+		#playListenButton:hover {
+			background: rgba(0,255,0,0.9);
+		}
+		
+		#listenButton.paused,
+		#playListenButton.paused {
+			background: rgba(200,100,0,0.8);
+			border-color: #ff8800;
+		}
+		
         #restartButton {
             position: absolute;
             top: 60px;
@@ -140,8 +179,10 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 			color: transparent !important;
 			text-shadow: 0 0 0 #000;
 		}
+
+		<style>
+</style>
 		
-    </style>
 </head>
 <body>
 	<select id="songSelector">
@@ -152,6 +193,9 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
         <option value="The Visitor">The Visitor</option>
     </select>
     <div id="loadingStatus">Select a song to begin...</div>
+
+	<button id="listenButton" aria-label="Listen" title="Listen">▶ LISTEN</button><button id="playListenButton" aria-label="Play & Listen" title="Play & Listen">▶ PLAY&LISTEN</button>
+
     <button id="playButton">▶ PLAY</button>
     <button id="restartButton">↻ RESET</button>
     
@@ -187,11 +231,11 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 	<audio id="backgroundMusic" src="The_Visitor.mp3"></audio>
 
     <canvas id="gameCanvas"></canvas>
-
-	<span id="musicEmojis" class="emoji-fill" style="position:absolute; pointer-events:none; z-index:200; font-size:42px; left:0; top:0;">🎶🎸</span>
-
-	<script>
 	
+	<span id="musicEmojis" class="emoji-fill" style="position:absolute; pointer-events:none; z-index:200; font-size:42px; left: calc(20px + ((100vh / 3 + 72px) * 0.544768) + 3mm); bottom: calc(20px + 6px);">🎶🎸</span>
+
+<script>
+
    // Embedded song data with real content
         const embeddedSongs = {
 		    "Four Strong Winds": `Four Strong Winds by Ian Tyson
@@ -955,28 +999,68 @@ There’s a cricket on the twentieth floor
                 ctx.stroke();
             }
         }
-				
-		function drawMusicEmojis() {
-			// Get the playButton's position and size
-			const playButton = document.getElementById('playButton');
-			const emojiSpan = document.getElementById('musicEmojis');
 
-			if (!playButton || !emojiSpan) return;
+		// drawMusicEmojis() — places emojis a few mm to the right of controls.jpg (aligned to controls bottom)
+		// Uses the measured controls width 2020 / height 3708
+		function drawMusicEmojis() {
+			var emojiSpan = document.getElementById('musicEmojis');
+			if (!emojiSpan || !canvas) return;
+
+			var GAP_MM = 3;
+			var PX_PER_MM = 96.0 / 25.4;
+			var gapPx = Math.round(GAP_MM * PX_PER_MM);
+			var VERT_NUDGE_PX = 6;
+
+			// Use canvas layout math (no need to wait for controlsImage)
+			var controlsHeight = canvas.height / 3 + 72;
+			var controlsX = 20;
+			var controlsY = Math.round(canvas.height - controlsHeight - 20);
+
+			// exact aspect ratio from your measured image width (2020) and height (3708)
+			var CONTROLS_ASPECT = 2020 / 3708; // = 0.544768...
+			var controlsWidth = Math.round(controlsHeight * CONTROLS_ASPECT);
+
+			var canvasRect = canvas.getBoundingClientRect();
+			var emojiRect = emojiSpan.getBoundingClientRect();
+
+			// If emoji hasn't been measured yet, guess using font-size fallback
+			if (!emojiRect.width || !emojiRect.height) {
+				emojiRect = { width: 42 * 2, height: 42 }; // fallback guess (approx)
+			}
+
+			var controlsLeftPage = Math.round(canvasRect.left + window.scrollX + controlsX);
+			var controlsBottomPage = Math.round(canvasRect.top + window.scrollY + controlsY + controlsHeight);
+
+			var left = controlsLeftPage + controlsWidth + gapPx;
+			var top  = controlsBottomPage - emojiRect.height - VERT_NUDGE_PX;
+
+			emojiSpan.style.position = 'absolute';
+			emojiSpan.style.left = Math.max(2, left) + 'px';
+			emojiSpan.style.top  = Math.max(2, top) + 'px';
+			emojiSpan.style.pointerEvents = 'none';
+		}
+
+//		function drawMusicEmojis() {
+			// Get the playButton's position and size
+//			const playButton = document.getElementById('playButton');
+//			const emojiSpan = document.getElementById('musicEmojis');
+
+//			if (!playButton || !emojiSpan) return;
 
 			// Get bounding rectangle relative to the viewport
-			const rect = playButton.getBoundingClientRect();
-			const canvasRect = canvas.getBoundingClientRect();
+//			const rect = playButton.getBoundingClientRect();
+//			const canvasRect = canvas.getBoundingClientRect();
 
 			// Calculate emoji position:
 			// - 24px to the left of the play button's left edge
 			// - Vertically centered relative to the play button
 			// - leaving enough room for all the emojis
-			const emojiX = rect.left - canvasRect.left - (24+150);
-			const emojiY = rect.top - canvasRect.top + (rect.height / 2) - 21;
+//			const emojiX = rect.left - canvasRect.left - (24+150);
+//			const emojiY = rect.top - canvasRect.top + (rect.height / 2) - 21;
 
-			emojiSpan.style.left = `${emojiX}px`;
-			emojiSpan.style.top = `${emojiY}px`;
-		}
+//			emojiSpan.style.left = `${emojiX}px`;
+//			emojiSpan.style.top = `${emojiY}px`;
+//		}
 
 		drawMusicEmojis();
         
@@ -1087,46 +1171,213 @@ There’s a cricket on the twentieth floor
             
             return line.substring(start, end).trim();
         }
+		
+		
         
 		// ---------------------------
 		// SYLLABLE DICTIONARY
 		// ---------------------------
 
 		const SYLLABLE_DICT = {
-            /* dictionary entries omitted here for brevity in the snapshot excerpt,
-               they're the same as the working file above; full contents retained
-               in the real saved file */
+ 			// ---------------------------
+			// Don't Think Twice, It's All Right
+			// ---------------------------
+			"baby": ["baby"],
+			"before": ["be", "fore"],
+			"better": ["bet", "ter"],
+			"could": ["could"],
+			"done": ["done"],
+			"farewell": ["fare", "well"],
+			"goodbye": ["good", "bye"],
+			"honey": ["hon", "ey"],
+			"kind": ["kind"],
+			"mind": ["mind"],
+			"never": ["nev", "er"],
+			"precious": ["pre", "cious"],
+			"reason": ["rea", "son"],
+			"rooster": ["roos", "ter"],
+			"saying": ["say", "ing"],
+			"talking": ["talk", "ing"],
+			"think": ["think"],
+			"travelin": ["trav", "el", "in"],
+			"wasted": ["wast", "ed"],
+			"window": ["win", "dow"],
+			"woman": ["wom", "an"],
+			"wonder": ["won", "der"],
+			"wondrin": ["wond", "rin"],
+			"anymore": ["an", "y", "more"],
+			"anyway": ["an", "y", "way"],
+
+			// ---------------------------
+			// Rainbow Connection
+			// ---------------------------
+			"amazing": ["a", "maz", "ing"],
+			"answered": ["an", "swered"],
+			"asleep": ["a", "sleep"],
+			"believe": ["be", "lieve"],
+			"believed": ["be", "lieved"],
+			"connection": ["con", "nec", "tion"],
+			"dreamers": ["dream", "ers"],
+			"illusion": ["il", "lu", "sion"],
+			"illusions": ["il", "lu", "sions"],
+			"laughter": ["laugh", "ter"],
+			"lovers": ["lov", "ers"],
+			"magic": ["mag", "ic"],
+			"morning": ["morn", "ing"],
+			"probably": ["prob", "ab", "ly"],
+			"rainbow": ["rain", "bow"],
+			"rainbows": ["rain", "bows"],
+			"sailors": ["sail", "ors"],
+			"somebody": ["some", "bod", "y"],
+			"something": ["some", "thing"],
+			"someday": ["some", "day"],
+			"stargazing": ["star", "gaz", "ing"],
+			"supposed": ["sup", "posed"],
+			"visions": ["vi", "sions"],
+			"voices": ["voic", "es"],
+			"wonder": ["won", "der"],
+
+			// ---------------------------
+			// High Flight
+			// ---------------------------
+			"climbed": ["climbed"],
+			"delirious": ["de", "lir", "i", "ous"],
+			"danced": ["danced"],
+			"footless": ["foot", "less"],
+			"joined": ["joined"],
+			"laugh": ["laugh"],
+			"mirth": ["mirth"],
+			"silvered": ["sil", "verd"],
+			"skies": ["skies"],
+			"slipped": ["slipped"],
+			"surly": ["sur", "ly"],
+			"tumblin": ["tum", "blin"],
+			"wings": ["wings"],
+
+			// ---------------------------
+			// The Visitor
+			// ---------------------------
+			"arrived": ["ar", "rived"],
+			"courier": ["cour", "i", "er"],
+			"cricket": ["crick", "et"],
+			"elevator": ["el", "e", "va", "tor"],
+			"figured": ["fig", "ured"],
+			"hoppin": ["hop", "pin"],
+			"mate": ["mate"],
+			"miss": ["miss"],
+			"people": ["peo", "ple"],
+			"playin": ["play", "in"],
+			"probly": ["prob", "ly"],
+			"scrape": ["scrape"],
+			"singin": ["sing", "in"],
+			"twentieth": ["twen", "ti", "eth"],
+            "unlikely": ["un", "like", "ly"],
+
+			// ---------------------------
+			// CONTRACTIONS: Don't Think Twice, It's All Right
+			// ---------------------------
+			"ain't": ["ain't"],
+			"can't": ["can't"],
+			"could've": ["could've"],
+			"couldn't": ["couldn't"],
+			"didn't": ["didn't"],
+			"doesn't": ["doesn't"],
+			"don't": ["don't"],
+			"hadn't": ["hadn't"],
+			"hasn't": ["hasn't"],
+			"haven't": ["haven't"],
+			"he's": ["he's"],
+			"i'd": ["i'd"],
+			"i'll": ["i'll"],
+			"i'm": ["i'm"],
+			"i've": ["i've"],
+			"isn't": ["isn't"],
+			"it's": ["it's"],
+			"let's": ["let's"],
+			"she's": ["she's"],
+			"shouldn't": ["shouldn't"],
+			"that's": ["that's"],
+			"there's": ["there's"],
+			"they'll": ["they'll"],
+			"they're": ["they're"],
+			"they've": ["they've"],
+			"wasn't": ["wasn't"],
+			"we're": ["we're"],
+			"weren't": ["weren't"],
+			"what's": ["what's"],
+			"where's": ["where's"],
+			"who's": ["who's"],
+			"won't": ["won't"],
+			"wouldn't": ["wouldn't"],
+			"you'd": ["you'd"],
+			"you'll": ["you'll"],
+			"you're": ["you're"],
+			"you've": ["you've"],
+
+			// ---------------------------
+			// CONTRACTIONS: Rainbow Connection
+			// ---------------------------
+			"what's": ["what's"],
+			"it's": ["it's"],
+			"didn't": ["didn't"],
+			"doesn't": ["doesn't"],
+			"there's": ["there's"],
+			"we've": ["we've"],
+			"he's": ["he's"],
+			"you're": ["you're"],
+
+			// ---------------------------
+			// CONTRACTIONS: High Flight
+			// ---------------------------
+			// (None commonly found; add if needed)
+
+			// ---------------------------
+			// CONTRACTIONS: The Visitor
+			// ---------------------------
+			"he'd": ["he'd"],
+			"he's": ["he's"],
+			"she's": ["she's"],
+			"it's": ["it's"],
+			"didn't": ["didn't"],
+			"can't": ["can't"],
+			"doesn't": ["doesn't"],
+			"there's": ["there's"],
+			"we're": ["we're"],
+			"you're": ["you're"]
 		};
         
-        function extractSyllableAtPosition(line, charIndex) {
-            // Extract the specific syllable that the beat position points to
-            if (charIndex >= line.length) return "";
-            
-            // Find the word at this position
-            let wordStart = charIndex;
-            while (wordStart > 0 && line[wordStart-1] !== ' ') {
-                wordStart--;
-            }
-            
-            let wordEnd = charIndex;
-            while (wordEnd < line.length && line[wordEnd] !== ' ') {
-                wordEnd++;
-            }
-            
-            const word = line.substring(wordStart, wordEnd).trim().toLowerCase();          
-            
-			// Look up syllables for this word (prefer word with apostrophe)
-			if (word in SYLLABLE_DICT) {
-				const syllables = SYLLABLE_DICT[word];
+		function extractSyllableAtPosition(line, charIndex) {
+			if (charIndex >= line.length) return "";
+			
+			// Find word boundaries at this character position
+			let wordStart = charIndex;
+			while (wordStart > 0 && line[wordStart-1] !== ' ') {
+				wordStart--;
+			}
+			
+			let wordEnd = charIndex;
+			while (wordEnd < line.length && line[wordEnd] !== ' ') {
+				wordEnd++;
+			}
+			
+			const word = line.substring(wordStart, wordEnd).trim().toLowerCase();
+			const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
+			const isFirstWord = wordStart === 0 || line.substring(0, wordStart).trim() === "";
+			
+			let result;
+			
+			// Look up syllables in dictionary and calculate which syllable at this position
+			if (cleanWord in SYLLABLE_DICT) {
+				const syllables = SYLLABLE_DICT[cleanWord];
 				const positionInWord = charIndex - wordStart;
-
-				// For contractions and single-syllable words, just use the whole word
-				if (syllables.length === 1) {
-					result = word;
-				} else if (word === "rainbow") {
+				
+				// Special cases for specific words
+				if (cleanWord === "rainbow") {
 					result = positionInWord < 4 ? "rain" : "bow";
-				} else if (word === "rainbows") {
+				} else if (cleanWord === "rainbows") {
 					result = positionInWord < 4 ? "rain" : "bows";
+				} else if (syllables.length === 1) {
+					result = word;
 				} else {
 					// Calculate actual syllable boundaries based on character counts
 					const syllableBoundaries = [];
@@ -1136,7 +1387,7 @@ There’s a cricket on the twentieth floor
 						syllableBoundaries.push(charCount);
 					}
 					// Find which syllable contains this position
-					result = syllables[syllables.length - 1]; // Default to last syllable
+					result = syllables[syllables.length - 1]; // default to last syllable
 					for (let i = 0; i < syllableBoundaries.length; i++) {
 						if (positionInWord < syllableBoundaries[i]) {
 							result = syllables[i];
@@ -1146,31 +1397,23 @@ There’s a cricket on the twentieth floor
 				}
 			} else {
 				// Fallback: try stripped version, or just highlight the word as-is
-				const cleanWord = word.replace(/[^\w]/g, '').toLowerCase();
 				if (cleanWord in SYLLABLE_DICT) {
 					const syllables = SYLLABLE_DICT[cleanWord];
 					result = syllables.length === 1 ? word : syllables[0];
 				} else {
 					result = word;
 				}
-			}            // Capitalize first word of line unless escaped with backslash
-
-            const originalWord = line.substring(wordStart, wordEnd).trim();
-			const isFirstWord = wordStart === 0 || line.substring(0, wordStart).trim() === "";
+			}
 			
-            if (isFirstWord) {
-                // Check for escape character
-                if (originalWord.startsWith('\\')) {
-                    // Remove escape character and keep lowercase
-                    result = result.toLowerCase();
-                } else {
-                    // Always capitalize first word unless escaped
-                    result = result.charAt(0).toUpperCase() + result.slice(1);
-                }
-            }
-            
-            return result;
-        }
+			// Capitalize first word of line unless escaped with backslash
+			const originalWord = line.substring(wordStart, wordEnd).trim();
+			if (isFirstWord && originalWord.length > 0 && !originalWord.startsWith("\\")) {
+				result = result.charAt(0).toUpperCase() + result.slice(1);
+			}
+			
+			return result;
+		}
+
         
         function extractChordsAndWords(chordLine, lyricLine, beatPositions) {
             const results = [];
@@ -1539,6 +1782,8 @@ There’s a cricket on the twentieth floor
                 playButton.className = '';
             }
         }
+		
+		
         
         function togglePlayback() {
             if (!currentSongKey) {
@@ -1630,10 +1875,24 @@ There’s a cricket on the twentieth floor
 				const button = checkButtonClick(mousePos, scaledButtonCoords);
 
 				if (button === "forward") {
-					audioElement.play().catch(function(err) {
-						alert("Music could not be played: " + err.message);
-						console.log(err);
-					});
+					togglePlayback();   // at the moment all this does is prompt the user to select a song
+					// Song start
+					audioElement.pause();
+					audioElement.currentTime = 0;
+					audioElement.play();
+					// Animation start  
+					resetSong();
+					waitingForStart = true;
+					songPaused = false;
+					pauseTime = 0;
+					bounceStartTime = performance.now() / 1000;
+				  
+					updatePlayButton();
+
+//					audioElement.play().catch(function(err) {
+//						alert("Music could not be played: " //+ err.message);
+//						console.log(err);
+//					});
 					return;
 				} else if (button === "pause") {
 					// Toggle music pause/play
@@ -1800,20 +2059,45 @@ There’s a cricket on the twentieth floor
         }
         
         // Mouse drag events
+        canvas.addEventListener('mousedown', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (isInProgressIndicator(x, y)) {
+                isDragging = true;
+                handleProgressDrag(e.clientX, e.clientY);
+                e.preventDefault();
+            }
+        });
+
+       // Mouse drag events
+        canvas.addEventListener('mousedown', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (isInProgressIndicator(x, y)) {
+                isDragging = true;
+                handleProgressDrag(e.clientX, e.clientY);
+                e.preventDefault();
+            }
+        });
+
         document.addEventListener('mousemove', function(e) {
             if (isDragging) {
                 handleProgressDrag(e.clientX, e.clientY);
                 e.preventDefault();
             }
         });
-        
+
         document.addEventListener('mouseup', function(e) {
             if (isDragging) {
                 isDragging = false;
                 e.preventDefault();
             }
-        });
-        
+        });                                     
+
         // Touch drag events
         document.addEventListener('touchmove', function(e) {
             if (isDragging && e.touches.length === 1) {
@@ -2180,6 +2464,61 @@ There’s a cricket on the twentieth floor
 			// restore alignment
 			ctx.textAlign = "left";
 		}		
+
+		(function() {
+			// Defensive init after DOM is ready
+			function initUnarmedButtons() {
+				var playBtn = document.getElementById('playButton'); // used only for reference if needed
+				var listenBtn = document.getElementById('listenButton');
+				var playListenBtn = document.getElementById('playListenButton');
+
+				if (!listenBtn && !playListenBtn) return;
+
+				// remember original labels
+				if (listenBtn && !listenBtn.dataset.orig) listenBtn.dataset.orig = listenBtn.textContent || '▶ LISTEN';
+				if (playListenBtn && !playListenBtn.dataset.orig) playListenBtn.dataset.orig = playListenBtn.textContent || '▶ PLAY&LISTEN';
+
+				function setPlayingVisual(btn) {
+					if (!btn) return;
+					btn.classList.remove('paused');
+					btn.textContent = '⏸ PAUSE';
+				}
+				function setPausedVisual(btn) {
+					if (!btn) return;
+					btn.classList.add('paused');
+					btn.textContent = btn.dataset.orig || '▶';
+				}
+				function toggleVisual(btn) {
+					if (!btn) return;
+					if (btn.classList.contains('paused')) setPlayingVisual(btn);
+					else setPausedVisual(btn);
+				}
+
+				if (listenBtn) {
+					listenBtn.addEventListener('click', function(e) {
+						e.preventDefault();
+						console.log('Listen button pressed — NOT armed.');
+						toggleVisual(listenBtn);
+					});
+					listenBtn.addEventListener('touchstart', function(e) { e.preventDefault(); listenBtn.click(); });
+				}
+
+				if (playListenBtn) {
+					playListenBtn.addEventListener('click', function(e) {
+						e.preventDefault();
+						console.log('Play&Listen button pressed — NOT armed.');
+						toggleVisual(playListenBtn);
+					});
+					playListenBtn.addEventListener('touchstart', function(e) { e.preventDefault(); playListenBtn.click(); });
+				}
+			}
+
+			if (document.readyState === 'loading') {
+				document.addEventListener('DOMContentLoaded', initUnarmedButtons);
+			} else {
+				initUnarmedButtons();
+			}
+		})();
 
     </script>
 </body>
