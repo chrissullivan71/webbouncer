@@ -4,7 +4,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 -->
 <html lang="en">
 <head>
-    <meta charset="UTF-8m>
+	<meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bouncing Ball Teleprompter (BBT)</title>
     <style>
@@ -194,7 +194,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
     </select>
     <div id="loadingStatus">Select a song to begin...</div>
 
-	<button id="listenButton" aria-label="Listen" title="Listen">▶ LISTEN</button><button id="playListenButton" aria-label="Play & Listen" title="Play & Listen">▶ PLAY&LISTEN</button>
+	<button id="listenButton" aria-label="Listen" title="Listen">🎧 LISTEN</button><button id="playListenButton" aria-label="Play & Listen 🎧 " title="Play & Listen">▶🎧 PLAY&LISTEN</button>
 
     <button id="playButton">▶ PLAY</button>
     <button id="restartButton">↻ RESET</button>
@@ -754,6 +754,8 @@ There’s a cricket on the twentieth floor
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const playButton = document.getElementById('playButton');
+        const listenButton = document.getElementById('listenButton');
+        const playListenButton = document.getElementById('playListenButton');
         const restartButton = document.getElementById('restartButton');
         const songSelector = document.getElementById('songSelector');	
         const speedSlider = document.getElementById('speedSlider');
@@ -761,27 +763,75 @@ There’s a cricket on the twentieth floor
         const debugInfo = document.getElementById('debugInfo');
         const debugData = document.getElementById('debugData');
 		const audioElement = document.getElementById('backgroundMusic');
+		
+		// Wire the centralized audio handlers so they run when the audio plays/pauses.
+		// Place immediately after:
+		//   const audioElement = document.getElementById('backgroundMusic');
+		if (audioElement) {
+		  audioElement.addEventListener('play', onAudioStarted);
+		  audioElement.addEventListener('playing', onAudioStarted);
+		  audioElement.addEventListener('pause', onAudioStopped);
+		  audioElement.addEventListener('ended', onAudioStopped);
+		}		
+		
+		// Centralized audio playback handler - single authoritative place to update audio state & UI.
+		// Place immediately after:
+		//   const audioElement = document.getElementById('backgroundMusic');
+		//
+		// Responsibilities:
+		// - Maintain audio_playing boolean (driven by audio events).
+		// - Update emoji UI.
+		// - Update Listen/Play&Listen visuals (green/brown).
+		// - Do NOT change Play button text (leave updatePlayButton() to handle it).
+		// - Keep procedural style (no classes).
+
+		var audio_playing = false;
+
+		function onAudioStarted() {
+		  audio_playing = true;
+		  // Emoji UI
+		  try { document.getElementById('musicEmojis').classList.remove('emoji-fill'); } catch (e) {}
+		  try { drawMusicEmojis(); } catch (e) {}
+
+		  // Clear "music OFF" visuals on Listen buttons (they should appear brown when audio plays)
+		  try {
+			if (window.performControls && typeof window.performControls.clearMusicOffVisuals === 'function') {
+			  window.performControls.clearMusicOffVisuals();
+			} else {
+			  var lb = document.getElementById('listenButton');
+			  var plb = document.getElementById('playListenButton');
+			  if (lb) { lb.classList.remove('active'); delete lb.dataset.active; lb.classList.add('paused'); }
+			  if (plb) { plb.classList.remove('active'); delete plb.dataset.active; plb.classList.add('paused'); }
+			}
+		  } catch (e) {}
+		  // Do NOT touch playButton.textContent here.
+		}
+
+		function onAudioStopped() {
+		  audio_playing = false;
+		  // Emoji UI
+		  try { document.getElementById('musicEmojis').classList.add('emoji-fill'); } catch (e) {}
+		  try { drawMusicEmojis(); } catch (e) {}
+
+		  // Set Listen buttons to "music OFF" visuals (green)
+		  try {
+			if (window.performControls && typeof window.performControls.setMusicOffVisuals === 'function') {
+			  window.performControls.setMusicOffVisuals();
+			} else {
+			  var lb = document.getElementById('listenButton');
+			  var plb = document.getElementById('playListenButton');
+			  if (lb) { lb.classList.add('active'); lb.classList.remove('paused'); lb.dataset.active = '1'; }
+			  if (plb) { plb.classList.add('active'); plb.classList.remove('paused'); plb.dataset.active = '1'; }
+			}
+		  } catch (e) {}
+		  // Do NOT touch playButton.textContent here.
+		}
 
 		// let musicIsPlaying = false;
 		function isAudioActuallyPlaying() {
 			return !audioElement.paused && !audioElement.ended && audioElement.currentTime > 0;
 		}		
 
-		// Track play, pause, and ended events
-		audioElement.addEventListener('play', () => {
-//			musicIsPlaying = true;
-//			ctx.fillStyle = isAudioActuallyPlaying() ? "#00cc44" : "#555";			
-			document.getElementById('musicEmojis').classList.remove('emoji-fill');
-			drawMusicEmojis();
-		});
-		
-		audioElement.addEventListener('pause', () => {
-//			musicIsPlaying = false;
-//			ctx.fillStyle = isAudioActuallyPlaying() ? "#00cc44" : "#555";			
-			document.getElementById('musicEmojis').classList.add('emoji-fill');
-			drawMusicEmojis();
-		});		
-        
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -2465,59 +2515,150 @@ There’s a cricket on the twentieth floor
 			ctx.textAlign = "left";
 		}		
 
-		(function() {
-			// Defensive init after DOM is ready
-			function initUnarmedButtons() {
-				var playBtn = document.getElementById('playButton'); // used only for reference if needed
-				var listenBtn = document.getElementById('listenButton');
-				var playListenBtn = document.getElementById('playListenButton');
+	// Updated procedural behavior for Listen, Play&Listen buttons (music toggle)
+	// - Music OFF is indicated by green (.active) state on the buttons.
+	// - Pressing a green button: starts music (button(s) become brown).
+	// - Pressing a brown button while music is playing: stops music (Ctrl‑Stop behavior) and sets green (.active).
+	// - No label text is changed for Listen/Play&Listen. Play button's label behavior remains controlled by your existing updatePlayButton().
+	// - Procedural, defensive, exposes small helpers on window.performControls for external control if needed.
+		// Minimal, safe init for Listen and Play&Listen buttons.
+		// - Does NOT touch playButton or its handlers.
+		// - Never changes the textContent/labels of the listen buttons.
+		// - Green (class 'active') = music OFF; cleared when audio plays.
+		// - Clicking green -> start music; clicking brown while music plays -> stop music (Ctrl-Stop) and set waitingForStart.
 
-				if (!listenBtn && !playListenBtn) return;
+		(function () {
+		  function initListenButtonsOnly() {
+			var listenBtn = document.getElementById('listenButton');
+			var playListenBtn = document.getElementById('playListenButton');
+			var audioEl = document.getElementById('backgroundMusic') || document.querySelector('audio');
 
-				// remember original labels
-				if (listenBtn && !listenBtn.dataset.orig) listenBtn.dataset.orig = listenBtn.textContent || '▶ LISTEN';
-				if (playListenBtn && !playListenBtn.dataset.orig) playListenBtn.dataset.orig = playListenBtn.textContent || '▶ PLAY&LISTEN';
+			if (!listenBtn && !playListenBtn) return;
 
-				function setPlayingVisual(btn) {
-					if (!btn) return;
-					btn.classList.remove('paused');
-					btn.textContent = '⏸ PAUSE';
-				}
-				function setPausedVisual(btn) {
-					if (!btn) return;
-					btn.classList.add('paused');
-					btn.textContent = btn.dataset.orig || '▶';
-				}
-				function toggleVisual(btn) {
-					if (!btn) return;
-					if (btn.classList.contains('paused')) setPlayingVisual(btn);
-					else setPausedVisual(btn);
-				}
+			// preserve original label text but we will NOT write to it
+			function ensureLabel(btn) {
+			  if (!btn) return;
+			  var lbl = btn.querySelector('.label');
+			  if (!lbl) {
+				// create .label if missing and preserve textual content
+				var text = (btn.textContent || '').trim();
+				// remove direct text nodes so icons remain
+				Array.from(btn.childNodes).forEach(function (n) {
+				  if (n.nodeType === Node.TEXT_NODE && n.textContent.trim()) btn.removeChild(n);
+				});
+				lbl = document.createElement('span');
+				lbl.className = 'label';
+				lbl.textContent = text;
+				btn.appendChild(lbl);
+			  }
+			  if (!btn.dataset.defaultLabel) btn.dataset.defaultLabel = lbl.textContent.trim();
+			}
+			ensureLabel(listenBtn);
+			ensureLabel(playListenBtn);
 
-				if (listenBtn) {
-					listenBtn.addEventListener('click', function(e) {
-						e.preventDefault();
-						console.log('Listen button pressed — NOT armed.');
-						toggleVisual(listenBtn);
-					});
-					listenBtn.addEventListener('touchstart', function(e) { e.preventDefault(); listenBtn.click(); });
-				}
+			// Visual helpers (only for the two listen buttons)
+			function setActive(btn, on) {
+			  if (!btn) return;
+			  if (on) {
+				btn.classList.add('active');   // green = OFF
+				btn.classList.remove('paused');
+				btn.dataset.active = '1';
+			  } else {
+				btn.classList.remove('active'); // brown = ON
+				btn.classList.add('paused');
+				delete btn.dataset.active;
+			  }
+			}
+			function isActive(btn) { return !!(btn && btn.dataset && btn.dataset.active === '1'); }
 
-				if (playListenBtn) {
-					playListenBtn.addEventListener('click', function(e) {
-						e.preventDefault();
-						console.log('Play&Listen button pressed — NOT armed.');
-						toggleVisual(playListenBtn);
-					});
-					playListenBtn.addEventListener('touchstart', function(e) { e.preventDefault(); playListenBtn.click(); });
-				}
+			// Audio helpers
+			function startMusicFromStart() {
+			  if (!audioEl) return;
+			  try { audioEl.currentTime = 0; } catch (e) { /* ignore */ }
+			  audioEl.play().catch(function (err) { console.error('startMusicFromStart play failed', err); });
+			  // optimistic UI clear; real state will sync from 'play' event
+			  setActive(listenBtn, false);
+			  setActive(playListenBtn, false);
+			}
+			function stopMusicLikeCtrlStop() {
+			  if (!audioEl) return;
+			  try {
+				audioEl.pause();
+				try { audioEl.currentTime = 0; } catch (e) { /* ignore */ }
+			  } catch (e) { console.error('stopMusicLikeCtrlStop error', e); }
+			  setActive(listenBtn, true);
+			  setActive(playListenBtn, true);
 			}
 
-			if (document.readyState === 'loading') {
-				document.addEventListener('DOMContentLoaded', initUnarmedButtons);
-			} else {
-				initUnarmedButtons();
+			// Init visuals based on current audio state
+			try {
+			  var playing = !!(audioEl && !audioEl.paused && !audioEl.ended && audioEl.currentTime > 0);
+			  setActive(listenBtn, !playing);
+			  setActive(playListenBtn, !playing);
+			} catch (e) { /* defensive */ }
+
+			// Public action functions (can be overridden elsewhere)
+			window.ListenToMusic = window.ListenToMusic || function () {
+			  startMusicFromStart();
+			};
+			window.ListenAndPlay = window.ListenAndPlay || function () {
+			  try { if (typeof resetSong === 'function') resetSong(); } catch (e) {}
+			  try { waitingForStart = true; } catch (e) {}
+			  try {
+				if (typeof togglePlayback === 'function') togglePlayback();
+				else {
+				  var pb = document.getElementById('playButton');
+				  if (pb && typeof pb.click === 'function') pb.click();
+				}
+			  } catch (e) { console.error('ListenAndPlay lyric start error', e); }
+			  startMusicFromStart();
+			};
+
+			// Click handlers for the two listen buttons only
+			function onListenClick(e) {
+			  e.preventDefault();
+			  if (isActive(listenBtn)) {
+				// green -> start music (no label changes)
+				try { window.ListenToMusic(); } catch (err) { console.error('ListenToMusic threw', err); }
+				return;
+			  }
+			  // brown -> stop music (Ctrl-Stop) then prepare lyrics to start at beginning
+			  stopMusicLikeCtrlStop();
+			  try { waitingForStart = true; } catch (e) {}
 			}
+			function onPlayListenClick(e) {
+			  e.preventDefault();
+			  if (isActive(playListenBtn)) {
+				// green -> start lyrics + music
+				try { window.ListenAndPlay(); } catch (err) { console.error('ListenAndPlay threw', err); }
+				return;
+			  }
+			  // brown -> stop music then set waitingForStart
+			  stopMusicLikeCtrlStop();
+			  try { waitingForStart = true; } catch (e) {}
+			}
+
+			if (listenBtn && !listenBtn.dataset.hooked) {
+			  listenBtn.addEventListener('click', onListenClick);
+			  listenBtn.addEventListener('touchstart', function (ev) { ev.preventDefault(); onListenClick(ev); }, { passive: false });
+			  listenBtn.dataset.hooked = '1';
+			}
+			if (playListenBtn && !playListenBtn.dataset.hooked) {
+			  playListenBtn.addEventListener('click', onPlayListenClick);
+			  playListenBtn.addEventListener('touchstart', function (ev) { ev.preventDefault(); onPlayListenClick(ev); }, { passive: false });
+			  playListenBtn.dataset.hooked = '1';
+			}
+
+			// small helper surface
+			window.performControls = window.performControls || {};
+			window.performControls.startMusicFromStart = startMusicFromStart;
+			window.performControls.stopMusicLikeCtrlStop = stopMusicLikeCtrlStop;
+			window.performControls.isListenActive = function () { return isActive(listenBtn); };
+			window.performControls.isPlayListenActive = function () { return isActive(playListenBtn); };
+		  }
+
+		  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initListenButtonsOnly);
+		  else initListenButtonsOnly();
 		})();
 
     </script>
