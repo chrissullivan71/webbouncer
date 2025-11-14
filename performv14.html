@@ -50,87 +50,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             padding: 5px;
             font-size: 12px;
         }
-        
-        #playButton {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 100;
-            background: rgba(0,200,0,0.8);
-            color: white;
-            border: 2px solid #00ff00;
-            padding: 10px 20px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 5px;
-            font-family: 'Courier New', monospace;
-        }
-        
-        #playButton:hover {
-            background: rgba(0,255,0,0.9);
-        }
-        
-        #playButton.paused {
-            background: rgba(200,100,0,0.8);
-            border-color: #ff8800;
-        }
-        
-		#listenButton,
-		#playListenButton {
-			position: absolute;
-			z-index: 100;
-			background: rgba(0,200,0,0.8);
-			color: white;
-			border: 2px solid #00ff00;
-			padding: 10px 20px;        /* same height as #playButton */
-			font-size: 16px;           /* same size as #playButton */
-			font-weight: bold;
-			cursor: pointer;
-			border-radius: 5px;
-			font-family: 'Courier New', monospace;
-			white-space: nowrap;
-			text-align: center;
-			/* default placement (absolute) — visible before any JS runs */
-			right: 140px;              /* sits left of the existing right:10px Play/Reset */
-		}
-		
-		#listenButton {
-			top: 10px;                 /* same vertical position as Play button */
-		}
-		
-		#playListenButton {
-			top: 60px;                 /* same vertical position as Reset button */
-		}
 
-		/* Match Play hover / paused visuals */
-		#listenButton:hover,
-		#playListenButton:hover {
-			background: rgba(0,255,0,0.9);
-		}
-		
-		#listenButton.paused,
-		#playListenButton.paused {
-			background: rgba(200,100,0,0.8);
-			border-color: #ff8800;
-		}
-		
-        #restartButton {
-            position: absolute;
-            top: 60px;
-            right: 10px;
-            z-index: 100;
-            background: rgba(200,0,0,0.8);
-            color: white;
-            border: 2px solid #ff0000;
-            padding: 8px 16px;
-            font-size: 14px;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 5px;
-            font-family: 'Courier New', monospace;
-        }
-        
         #controls {
             position: absolute;
             bottom: 10px;
@@ -141,25 +61,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             text-align: right;
             max-width: 300px;
         }
-
-        #speedControl {
-            position: absolute;
-            top: 110px;
-            right: 10px;
-            z-index: 100;
-            background: rgba(0,0,0,0.7);
-            border: 2px solid #00ff00;
-            padding: 10px;
-            border-radius: 5px;
-            color: white;
-            font-size: 12px;
-        }
-
-        #speedSlider {
-            width: 160px;
-            margin: 5px 0;
-        }
-
+        
         #debugInfo {
             position: absolute;
             top: 200px;
@@ -175,11 +77,198 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
             display: none;
         }
 		
+		/* Controls row (bottom-right) */
+		#controlRow {
+			position: absolute;
+			right: 10px;               /* distance from right edge of viewport */
+			bottom: 10px;              /* distance from bottom edge of viewport */
+			z-index: 100;
+			display: flex;
+			flex-direction: row;
+			align-items: center;
+			gap: 10px;                 /* space between items, adjust to taste */
+			pointer-events: auto;
+		}
+
+		/* Shared button appearance (no absolute positioning) */
+		#controlRow button,
+		#controlRow #speedControl {
+			position: relative;        /* let flexbox handle layout */
+			background: rgba(0,200,0,0.8);
+			color: white;
+			border: 2px solid #00ff00;
+			padding: 10px 16px;
+			font-size: 16px;
+			font-weight: bold;
+			cursor: pointer;
+			border-radius: 5px;
+			font-family: 'Courier New', monospace;
+			white-space: nowrap;
+		}
+
+		/* Individual tweaks */
+		#restartButton {
+			background: rgba(200,0,0,0.8);
+			border-color: #ff0000;
+			padding: 8px 14px;
+			font-size: 14px;
+		}
+
+		/* Hover / paused visuals */
+		#listenButton:hover,
+		#playListenButton:hover,
+		#playButton:hover {
+			background: rgba(0,255,0,0.9);
+		}
+
+		#listenButton.paused,
+		#playListenButton.paused,
+		#playButton.paused {
+			background: rgba(200,100,0,0.8);
+			border-color: #ff8800;
+		}
+
+		/* speed control inside the controls row */
+		#controlRow #speedControl {
+			background: rgba(0,0,0,0.7);
+			border: 2px solid #00ff00;
+			padding: 8px;
+			border-radius: 5px;
+			color: white;
+			font-size: 12px;
+			display: flex;
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 4px;
+		}
+
+		/* speed slider size */
+		#speedSlider {
+			width: 160px;
+			margin: 0;
+		}
+		
 		.emoji-fill {
 			color: transparent !important;
 			text-shadow: 0 0 0 #000;
 		}
+		
+		/* Add to the <style> block */
+		#gameCanvas {
+		  position: absolute;
+		  left: 0;
+		  top: 0;
+		  width: 100%;
+		  height: 100%;
+		  z-index: 0;
+		  pointer-events: auto; /* keep normal behavior for canvas interactions unless you explicitly disable pointerEvents */
+		}
 
+		/* Ensure UI controls are above the canvas and can be clicked */
+		#controlRow {
+		  position: absolute; /* already present — keep */
+		  z-index: 2000;
+		  pointer-events: auto;
+		}
+		
+		/* Controls row (bottom-left anchor; JS will nudge it right to avoid tape+emoji) */
+		#controlRow {
+			position: absolute;
+			left: 10px;                /* anchor at the bottom-left by default */
+			right: auto;               /* clear any right anchor */
+			bottom: 10px;
+			z-index: 2000;             /* keep above canvas */
+			display: flex;
+			flex-direction: row;
+			align-items: center;
+			gap: 10px;
+			pointer-events: auto;
+			transform-origin: left bottom; /* keep scaling / positioning predictable */
+			max-width: calc(100% - 40px);  /* avoid overflow if viewport narrow */
+		}
+		
+		
+		/* Controls row (anchored left; limited width so it won't reach the right-side help text) */
+		#controlRow {
+		  position: absolute;
+		  left: 10px;
+		  right: auto;
+		  bottom: 10px;
+		  z-index: 2000;
+		  display: flex;
+		  flex-direction: row;
+		  align-items: center;
+		  gap: 8px;
+		  pointer-events: auto;
+		  transform-origin: left bottom;
+		  flex-wrap: wrap;                           /* allow the row to wrap to another line if it gets too long */
+		  max-width: calc(100% - 360px);             /* leave ~360px on the right for the help text & speed box */
+		  box-sizing: border-box;
+		  padding: 6px 4px;                          /* small padding around the group */
+		}
+
+		/* Make each control narrower: smaller font, tighter padding, fixed sensible min/max widths */
+		#controlRow button,
+		#controlRow #speedControl {
+		  position: relative;
+		  background: rgba(0,200,0,0.8);
+		  color: white;
+		  border: 2px solid #00ff00;
+		  padding: 8px 12px;                         /* reduced horizontal padding (was larger) */
+		  font-size: 14px;                           /* reduced font-size */
+		  font-weight: bold;
+		  cursor: pointer;
+		  border-radius: 5px;
+		  font-family: 'Courier New', monospace;
+		  white-space: nowrap;
+		  box-sizing: border-box;
+		  min-width: 92px;                           /* prevents too-small buttons */
+		  max-width: 160px;                          /* caps length */
+		  overflow: hidden;
+		  text-overflow: ellipsis;
+		  flex: 0 0 auto;                            /* keep each item its intrinsic size (don't stretch) */
+		}
+
+		/* Slightly smaller restart button */
+		#restartButton {
+		  padding: 6px 10px;
+		  font-size: 13px;
+		}
+
+		/* Speed control box smaller */
+		#controlRow #speedControl {
+		  background: rgba(0,0,0,0.7);
+		  border: 2px solid #00ff00;
+		  padding: 6px 8px;
+		  border-radius: 5px;
+		  color: white;
+		  font-size: 12px;
+		  display: flex;
+		  flex-direction: column;
+		  align-items: flex-start;
+		  gap: 6px;
+		  min-width: 140px;
+		  max-width: 220px;
+		}
+
+		/* slider width reduced */
+		#speedSlider {
+		  width: 120px;
+		  margin: 0;
+		}
+
+		/* make the emoji visually smaller / narrower so it uses less horizontal space */
+		#musicEmojis {
+		  position: absolute !important;
+		  z-index: 3000 !important;
+		  pointer-events: none;
+		  font-size: 32px;            /* smaller than before */
+		  transform: scaleX(0.8);     /* slightly compress horizontally */
+		  transform-origin: left bottom;
+		  line-height: 1;
+		  display: inline-block;
+		}
+		
 	</style>
 		
 </head>
@@ -193,18 +282,19 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
     </select>
     <div id="loadingStatus">Select a song to begin...</div>
 
-	<button id="listenButton" aria-label="Listen" title="Listen">▶ LISTEN</button>
-	<button id="playListenButton" aria-label="Play & Listen" title="Play & Listen">▶ PLAY&LISTEN</button>
+	<div id="controlRow">
+	  <button id="listenButton" aria-label="Listen">▶ LISTEN</button>
+	  <button id="playListenButton" aria-label="Play & Listen">▶ PLAY&LISTEN</button>
+	  <button id="playButton">▶ PLAY</button>
+	  <button id="restartButton">↻ RESET</button>
 
-    <button id="playButton">▶ PLAY</button>
-    <button id="restartButton">↻ RESET</button>
-    
-    <div id="speedControl">
-        <div>Speed Control:</div>
-        <input type="range" id="speedSlider" min="0" max="4" value="0" step="1">
-        <div id="speedLabel">Speed: 1.0x</div>
-    </div>
-	
+	  <div id="speedControl">
+		<div>Speed Control:</div>
+		<input type="range" id="speedSlider" min="0" max="4" value="0" step="1">
+		<div id="speedLabel">Speed: 1.0x</div>
+	  </div>
+	</div>
+
     <div id="debugInfo">
         <div>DEBUG MODE ACTIVE</div>
         <div id="debugData"></div>
@@ -231,9 +321,9 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 	<audio id="backgroundMusic" src="The_Visitor.mp3"></audio>
 
     <canvas id="gameCanvas"></canvas>
-	
-	<span id="musicEmojis" class="emoji-fill" style="position:absolute; pointer-events:none; z-index:200; font-size:42px; left: calc(20px + ((100vh / 3 + 72px) * 0.544768) + 3mm); bottom: calc(20px + 6px);">🎶🎸</span>
 
+	<span id="musicEmojis" style="position:absolute; pointer-events:none; z-index:3000; font-size:42px; left: calc(20px + ((100vh / 3 + 72px) * 0.544768) + 3mm); bottom: calc(20px + 6px);">🎶🎸</span>
+	
 <script>
 
    // Embedded song data with real content
@@ -761,6 +851,13 @@ There’s a cricket on the twentieth floor
         const speedLabel = document.getElementById('speedLabel');
         const debugInfo = document.getElementById('debugInfo');
         const debugData = document.getElementById('debugData');
+		// Adjust the allowance (48px) or the base (2020) (that is the eidth of the tape deck, the 
+	    // 48 is nominally to allow for the emojis
+		const CONTROLS_PLUS_EMOJI_WIDTH = 2020 + 48;
+
+		// Place the emoji once, then position the control row using the literal constant:
+		window.addEventListener('load', () => { drawMusicEmojis(); positionControlRowByConstant(); });
+		
 		const audioElement = document.getElementById('backgroundMusic');
 		if (!audioElement) {
 		  console.error('#backgroundMusic element not found');
@@ -1024,46 +1121,106 @@ There’s a cricket on the twentieth floor
             }
         }
 
-		// drawMusicEmojis() — places emojis a few mm to the right of controls.jpg (aligned to controls bottom)
-		// Uses the measured controls width 2020 / height 3708
+		// Position controlRow relative to the emoji using the fixed constant width.
+		// gapPx: separation between emoji and control row; marginPx: viewport margin.
+		function positionControlRowByConstant(controlRowWidthPx = CONTROLS_PLUS_EMOJI_WIDTH, gapPx = 8, marginPx = 6) {
+			var emoji = document.getElementById('musicEmojis');
+			var row = document.getElementById('controlRow');
+			if (!emoji || !row) return;
+
+			// Measure emoji only (we do not rely on the row measured width)
+			var eRect = emoji.getBoundingClientRect(); 
+			var vw = window.innerWidth;
+			var vh = window.innerHeight; 
+			if (!controlRowWidthPx || controlRowWidthPx > vw) controlRowWidthPx = row.getBoundingClientRect().width;
+
+			// Preferred left if placing to the right of emoji
+			var placeRightLeft = Math.round(eRect.right + gapPx);
+
+			// Preferred left if placing to the left of emoji
+			var placeLeftLeft = Math.round(eRect.left - gapPx - controlRowWidthPx);
+
+			// Allowed clamped left range
+			var minLeft = marginPx;
+			var maxLeft = Math.max(minLeft, vw - controlRowWidthPx - marginPx);
+
+			var chosenLeft;
+			if (placeRightLeft <= maxLeft) {
+				// room on the right
+				chosenLeft = placeRightLeft;
+			} else if (placeLeftLeft >= minLeft) {
+				// not enough room on right; room on left
+				chosenLeft = placeLeftLeft;
+			} else {
+				// neither ideal; clamp to viewport with margin
+				chosenLeft = Math.min(Math.max(placeRightLeft, minLeft), maxLeft);
+			}
+
+			// Apply left and bottom; clear right so left takes effect
+			row.style.right = '';
+			row.style.left = Math.max(minLeft, Math.round(chosenLeft)) + 'px';
+
+			// Vertically align bottom to the emoji bottom (stable)
+			var emojiBottom = Math.round(eRect.bottom);
+			var bottomPx = Math.round(vh - emojiBottom);
+			row.style.bottom = Math.max(marginPx, bottomPx) + 'px';
+		}
+
+
+		/*
+		  Complete replacement drawMusicEmojis().
+
+		  - Reuses the same canvas controls math already in the file.
+		  - Does NOT measure or cache the emoji height.
+		  - Sets style.bottom (not top) so vertical position is stable.
+		  - Uses existing GAP_MM/PX_PER_MM or VERT_NUDGE_PX if present; otherwise uses small pixel fallbacks.
+		  - Positions the emoji a short gap to the right of the drawn controls.
+		*/
 		function drawMusicEmojis() {
 			var emojiSpan = document.getElementById('musicEmojis');
 			if (!emojiSpan || !canvas) return;
 
-			var GAP_MM = 3;
-			var PX_PER_MM = 96.0 / 25.4;
-			var gapPx = Math.round(GAP_MM * PX_PER_MM);
-			var VERT_NUDGE_PX = 6;
+			// Position only once (static placement). Subsequent calls skip the expensive layout math.
+			if (!window.__emojiPlaced) {
+				emojiSpan.style.position = 'absolute';
+				emojiSpan.style.pointerEvents = 'none';
 
-			// Use canvas layout math (no need to wait for controlsImage)
-			var controlsHeight = canvas.height / 3 + 72;
-			var controlsX = 20;
-			var controlsY = Math.round(canvas.height - controlsHeight - 20);
+				// Same control geometry math used by the renderer
+				var controlsHeight = Math.round(canvas.height / 3 + 72);
+				var CONTROLS_ASPECT = 2020 / 3708;
+				var controlsWidth = Math.round(controlsHeight * CONTROLS_ASPECT);
+				var controlsX = 20;
+				var controlsY = Math.round(canvas.height - controlsHeight - 20);
 
-			// exact aspect ratio from your measured image width (2020) and height (3708)
-			var CONTROLS_ASPECT = 2020 / 3708; // = 0.544768...
-			var controlsWidth = Math.round(controlsHeight * CONTROLS_ASPECT);
+				var canvasRect = canvas.getBoundingClientRect();
+				var controlsLeftPage = Math.round(canvasRect.left + window.scrollX + controlsX);
+				var controlsBottomPage = Math.round(canvasRect.top + window.scrollY + controlsY + controlsHeight);
 
-			var canvasRect = canvas.getBoundingClientRect();
-			var emojiRect = emojiSpan.getBoundingClientRect();
+				var gapPx = (typeof GAP_MM !== 'undefined' && typeof PX_PER_MM !== 'undefined')
+					? Math.round(GAP_MM * PX_PER_MM)
+					: 6;
 
-			// If emoji hasn't been measured yet, guess using font-size fallback
-			if (!emojiRect.width || !emojiRect.height) {
-				emojiRect = { width: 42 * 2, height: 42 }; // fallback guess (approx)
+				var vertNudge = (typeof VERT_NUDGE_PX !== 'undefined') ? VERT_NUDGE_PX : 6;
+
+				var left = controlsLeftPage + controlsWidth + gapPx;
+				var bottomPx = Math.round(window.innerHeight - controlsBottomPage + vertNudge);
+
+				emojiSpan.style.left = Math.max(2, left) + 'px';
+				emojiSpan.style.bottom = bottomPx + 'px';
+				emojiSpan.style.top = '';
+				emojiSpan.style.right = '';
+
+				window.__emojiPlaced = true;
 			}
 
-			var controlsLeftPage = Math.round(canvasRect.left + window.scrollX + controlsX);
-			var controlsBottomPage = Math.round(canvasRect.top + window.scrollY + controlsY + controlsHeight);
-
-			var left = controlsLeftPage + controlsWidth + gapPx;
-			var top  = controlsBottomPage - emojiRect.height - VERT_NUDGE_PX;
-
-			emojiSpan.style.position = 'absolute';
-			emojiSpan.style.left = Math.max(2, left) + 'px';
-			emojiSpan.style.top  = Math.max(2, top) + 'px';
-			emojiSpan.style.pointerEvents = 'none';
+			// Update fill (colour) every call — cheap DOM class toggle only.
+			// Uses existing helper isAudioActuallyPlaying() which reads the audio element state.
+			if (typeof isAudioActuallyPlaying === 'function' && isAudioActuallyPlaying()) {
+				emojiSpan.classList.remove('emoji-fill');
+			} else {
+				emojiSpan.classList.add('emoji-fill');
+			}
 		}
-
 //		function drawMusicEmojis() {
 			// Get the playButton's position and size
 //			const playButton = document.getElementById('playButton');
@@ -1086,8 +1243,10 @@ There’s a cricket on the twentieth floor
 //			emojiSpan.style.top = `${emojiY}px`;
 //		}
 
+		
 		drawMusicEmojis();
-        
+		positionControlRowByConstant();   // uses CONTROLS_PLUS_EMOJI_WIDTH internally
+		
         const POSITION_TITLE = 120;
         const POSITION_TIME_SIGNATURE = 150;
         const POSITION_SECTION = 180;
@@ -2619,16 +2778,20 @@ There’s a cricket on the twentieth floor
 							console.error('Play&Listen handler error', err);
 						}
 					});
+					playListenBtn.addEventListener('touchstart', function(e) {
+						e.preventDefault();
+						playListenBtn.click();
+					}, { passive: false });
+					} // end if (playListenBtn && !playListenBtn.dataset.bound)
+				} // end function initListeningButtons
 
-					playListenBtn.addEventListener('touchstart', function(e) { e.preventDefault(); playListenBtn.click(); }, { passive: false });
-}			}
-			if (document.readyState === 'loading') {
-				document.addEventListener('DOMContentLoaded', initListeningButtons);
-			} else {
-				initListeningButtons();
-			}
-		})();
-
+				if (document.readyState === 'loading') {
+					document.addEventListener('DOMContentLoaded', initListeningButtons);
+				} else {
+					initListeningButtons();
+				}
+			})();
+			
     </script>
 </body>
 </html>
