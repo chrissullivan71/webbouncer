@@ -8,171 +8,89 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bouncing Ball Teleprompter (BBT)</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background: #1e1e1e;
-            color: white;
-            font-family: 'Courier New', monospace;
-            overflow: hidden;
-            user-select: none;
-            -webkit-user-select: none;
-            -webkit-touch-callout: none;
-        }
-        
-        #gameCanvas {
-            display: block;
-            background: #1e1e1e;
-            cursor: pointer;
-        }
-
-        #songSelector {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 100;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            border: 2px solid #00ff00;
-            padding: 8px;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            border-radius: 5px;
-        }
-        
-        #loadingStatus {
-            position: absolute;
-            top: 50px;
-            left: 10px;
-            z-index: 100;
-            background: rgba(0,0,0,0.7);
-            color: #00ff00;
-            padding: 5px;
-            font-size: 12px;
-        }
-
-        #controls {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            z-index: 100;
-            color: #00ff00;
-            font-size: 12px;
-            text-align: right;
-            max-width: 300px;
-        }
-        
-        #debugInfo {
-            position: absolute;
-            top: 200px;
-            right: 10px;
-            z-index: 100;
-            background: rgba(0,0,0,0.8);
-            border: 2px solid #ffff00;
-            padding: 10px;
-            border-radius: 5px;
-            color: #ffff00;
-            font-size: 11px;
-            max-width: 300px;
-            display: none;
-        }
-		
-		/* Controls row (bottom-right) */
-		#controlRow {
-			position: absolute;
-			right: 10px;               /* distance from right edge of viewport */
-			bottom: 10px;              /* distance from bottom edge of viewport */
-			z-index: 100;
-			display: flex;
-			flex-direction: row;
-			align-items: center;
-			gap: 10px;                 /* space between items, adjust to taste */
-			pointer-events: auto;
-		}
-
-		/* Shared button appearance (no absolute positioning) */
-		#controlRow button,
-		#controlRow #speedControl {
-			position: relative;        /* let flexbox handle layout */
-			background: rgba(0,200,0,0.8);
-			color: white;
-			border: 2px solid #00ff00;
-			padding: 10px 16px;
-			font-size: 16px;
-			font-weight: bold;
-			cursor: pointer;
-			border-radius: 5px;
-			font-family: 'Courier New', monospace;
-			white-space: nowrap;
-		}
-
-		/* Individual tweaks */
-		#restartButton {
-			background: rgba(200,0,0,0.8);
-			border-color: #ff0000;
-			padding: 8px 14px;
-			font-size: 14px;
-		}
-
-		/* Hover / paused visuals */
-		#listenButton:hover,
-		#playListenButton:hover,
-		#playButton:hover {
-			background: rgba(0,255,0,0.9);
-		}
-
-		#listenButton.paused,
-		#playListenButton.paused,
-		#playButton.paused {
-			background: rgba(200,100,0,0.8);
-			border-color: #ff8800;
-		}
-
-		/* speed control inside the controls row */
-		#controlRow #speedControl {
-			background: rgba(0,0,0,0.7);
-			border: 2px solid #00ff00;
-			padding: 8px;
-			border-radius: 5px;
-			color: white;
-			font-size: 12px;
-			display: flex;
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 4px;
-		}
-
-		/* speed slider size */
-		#speedSlider {
-			width: 160px;
+		  /* Page basics */
+		  body {
 			margin: 0;
-		}
-		
-		.emoji-fill {
-			color: transparent !important;
-			text-shadow: 0 0 0 #000;
-		}
-		
-		/* Add to the <style> block */
-		#gameCanvas {
-		  position: absolute;
-		  left: 0;
-		  top: 0;
-		  width: 100%;
-		  height: 100%;
-		  z-index: 0;
-		  pointer-events: auto; /* keep normal behavior for canvas interactions unless you explicitly disable pointerEvents */
-		}
+			padding: 0;
+			background: #1e1e1e;
+			color: white;
+			font-family: 'Courier New', monospace;
+			overflow: hidden;
+			user-select: none;
+			-webkit-user-select: none;
+			-webkit-touch-callout: none;
+		  }
 
-		/* Ensure UI controls are above the canvas and can be clicked */
-		#controlRow {
-		  position: absolute; /* already present — keep */
-		  z-index: 2000;
-		  pointer-events: auto;
-		}
-		
-		/* Controls row (bottom-left anchor; JS will nudge it right to avoid tape+emoji) */
-		#controlRow {
+		  /* Canvas */
+		  #gameCanvas {
+			position: absolute;
+			left: 0;
+			top: 0;
+			width: 100%;
+			height: 100%;
+			display: block;
+			background: #1e1e1e;
+			cursor: pointer;
+			z-index: 0;
+			pointer-events: auto;
+		  }
+
+			/* Song selector: place 122px down and aligned to the right; limit width so it won't span the page */
+			#songSelector {
+			  position: absolute;
+			  top: 82px;            /* 82px below top of viewport (under the mag-tape) */
+			  right: 10px;           /* align near right edge; change to 0px if you want flush */
+			  z-index: 2500;
+			  padding: 8px 10px;
+			  border-radius: 6px;
+			  border: 2px solid #00ff00;
+			  background: rgba(0,0,0,0.7);
+			  color: #fff;
+			  font-family: 'Courier New', monospace;
+			  font-size: 14px;
+			  box-sizing: border-box;
+
+			  /* prevent full-width stretching */
+			  width: auto;           /* let the selector size to its contents */
+			  min-width: 160px;      /* minimum usable size */
+			  max-width: 420px;      /* caps width so it won't span the canvas */
+			  display: inline-block; /* avoid block-level width expansion */
+			  overflow: hidden;
+			  text-overflow: ellipsis;
+			  white-space: nowrap;
+			}
+
+		  /* Right-side help block */
+		  #controls {
+			position: absolute;
+			top: 200px;
+			right: 10px;
+			z-index: 100;
+			color: #00ff00;
+			font-size: 12px;
+			text-align: right;
+			max-width: 300px;
+		  }
+
+		  /* Debug info */
+		  #debugInfo {
+			position: absolute;
+			top: 200px;
+			right: 10px;
+			z-index: 100;
+			background: rgba(0,0,0,0.8);
+			border: 2px solid #ffff00;
+			padding: 10px;
+			border-radius: 5px;
+			color: #ffff00;
+			font-size: 11px;
+			max-width: 300px;
+			display: none;
+		  }
+
+		  /* Control row (single consolidated definition).
+			 Anchored bottom-left; JS may nudge it to the right to avoid tape/emoji. */
+		  #controlRow {
 			position: absolute;
 			left: 10px;                /* anchor at the bottom-left by default */
 			right: auto;               /* clear any right anchor */
@@ -181,96 +99,96 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 			display: flex;
 			flex-direction: row;
 			align-items: center;
-			gap: 10px;
+			gap: 8px;
 			pointer-events: auto;
-			transform-origin: left bottom; /* keep scaling / positioning predictable */
-			max-width: calc(100% - 40px);  /* avoid overflow if viewport narrow */
-		}
-		
-		
-		/* Controls row (anchored left; limited width so it won't reach the right-side help text) */
-		#controlRow {
-		  position: absolute;
-		  left: 10px;
-		  right: auto;
-		  bottom: 10px;
-		  z-index: 2000;
-		  display: flex;
-		  flex-direction: row;
-		  align-items: center;
-		  gap: 8px;
-		  pointer-events: auto;
-		  transform-origin: left bottom;
-		  flex-wrap: wrap;                           /* allow the row to wrap to another line if it gets too long */
-		  max-width: calc(100% - 360px);             /* leave ~360px on the right for the help text & speed box */
-		  box-sizing: border-box;
-		  padding: 6px 4px;                          /* small padding around the group */
-		}
+			transform-origin: left bottom;
+			flex-wrap: wrap;                           /* allow the row to wrap if it gets too long */
+			max-width: calc(100% - 360px);             /* leave room on the right for help text */
+			box-sizing: border-box;
+			padding: 6px 4px;                          /* small padding around the group */
+		  }
 
-		/* Make each control narrower: smaller font, tighter padding, fixed sensible min/max widths */
-		#controlRow button,
-		#controlRow #speedControl {
-		  position: relative;
-		  background: rgba(0,200,0,0.8);
-		  color: white;
-		  border: 2px solid #00ff00;
-		  padding: 8px 12px;                         /* reduced horizontal padding (was larger) */
-		  font-size: 14px;                           /* reduced font-size */
-		  font-weight: bold;
-		  cursor: pointer;
-		  border-radius: 5px;
-		  font-family: 'Courier New', monospace;
-		  white-space: nowrap;
-		  box-sizing: border-box;
-		  min-width: 92px;                           /* prevents too-small buttons */
-		  max-width: 160px;                          /* caps length */
-		  overflow: hidden;
-		  text-overflow: ellipsis;
-		  flex: 0 0 auto;                            /* keep each item its intrinsic size (don't stretch) */
-		}
+		  /* Buttons & speed control inside the row */
+		  #controlRow button,
+		  #controlRow #speedControl {
+			position: relative;
+			background: rgba(0,200,0,0.8);
+			color: white;
+			border: 2px solid #00ff00;
+			padding: 8px 12px;                         /* reduced horizontal padding */
+			font-size: 14px;                           /* reduced font-size */
+			font-weight: bold;
+			cursor: pointer;
+			border-radius: 5px;
+			font-family: 'Courier New', monospace;
+			white-space: nowrap;
+			box-sizing: border-box;
+			min-width: 92px;                           /* prevents too-small buttons */
+			max-width: 160px;                          /* caps length */
+			overflow: hidden;
+			text-overflow: ellipsis;
+			flex: 0 0 auto;
+		  }
 
-		/* Slightly smaller restart button */
-		#restartButton {
-		  padding: 6px 10px;
-		  font-size: 13px;
-		}
+		  /* Slightly smaller restart button */
+		  #restartButton {
+			padding: 6px 10px;
+			font-size: 13px;
+			background: rgba(200,0,0,0.8);
+			border-color: #ff0000;
+		  }
 
-		/* Speed control box smaller */
-		#controlRow #speedControl {
-		  background: rgba(0,0,0,0.7);
-		  border: 2px solid #00ff00;
-		  padding: 6px 8px;
-		  border-radius: 5px;
-		  color: white;
-		  font-size: 12px;
-		  display: flex;
-		  flex-direction: column;
-		  align-items: flex-start;
-		  gap: 6px;
-		  min-width: 140px;
-		  max-width: 220px;
-		}
+		  /* Hover / paused visuals */
+		  #listenButton:hover,
+		  #playListenButton:hover,
+		  #playButton:hover {
+			background: rgba(0,255,0,0.9);
+		  }
+		  #listenButton.paused,
+		  #playListenButton.paused,
+		  #playButton.paused {
+			background: rgba(200,100,0,0.8);
+			border-color: #ff8800;
+		  }
 
-		/* slider width reduced */
-		#speedSlider {
-		  width: 120px;
-		  margin: 0;
-		}
+		  /* Speed control box styling */
+		  #controlRow #speedControl {
+			background: rgba(0,0,0,0.7);
+			border: 2px solid #00ff00;
+			padding: 6px 8px;
+			border-radius: 5px;
+			color: white;
+			font-size: 12px;
+			display: flex;
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 6px;
+			min-width: 140px;
+			max-width: 220px;
+		  }
 
-		/* make the emoji visually smaller / narrower so it uses less horizontal space */
-		#musicEmojis {
-		  position: absolute !important;
-		  z-index: 3000 !important;
-		  pointer-events: none;
-		  font-size: 32px;            /* smaller than before */
-		  transform: scaleX(0.8);     /* slightly compress horizontally */
-		  transform-origin: left bottom;
-		  line-height: 1;
-		  display: inline-block;
-		}
-		
+		  /* Slider width */
+		  #speedSlider {
+			width: 120px;
+			margin: 0;
+		  }
+
+		  /* Emoji / audio indicator */
+		  .emoji-fill {
+			color: transparent !important;
+			text-shadow: 0 0 0 #000;
+		  }
+		  #musicEmojis {
+			position: absolute !important;
+			z-index: 3000 !important;
+			pointer-events: none;
+			font-size: 32px;
+			transform: scaleX(0.8);     /* slightly compress horizontally */
+			transform-origin: left bottom;
+			line-height: 1;
+			display: inline-block;
+		  }
 	</style>
-		
 </head>
 <body>
 	<select id="songSelector">
@@ -294,7 +212,7 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 		<div id="speedLabel">Speed: 1.0x</div>
 	  </div>
 	</div>
-
+	
     <div id="debugInfo">
         <div>DEBUG MODE ACTIVE</div>
         <div id="debugData"></div>
@@ -2298,12 +2216,20 @@ There’s a cricket on the twentieth floor
             e.preventDefault();
         });
         
-        function renderText(text, x, y, color, fontSize = 40) {
-            ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
-            ctx.fillStyle = colorToString(color);
-            ctx.fillText(text, x, y);
-        }
-        
+		function renderText(text, x, y, color, fontSize = 40, align = 'left', baseline = 'alphabetic') {
+			ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+			ctx.textAlign = align;           // 'left' | 'center' | 'right'
+			ctx.textBaseline = baseline;     // 'alphabetic' | 'top' | 'bottom' | etc.
+			// subtle stroke for readability, then fill
+			ctx.lineWidth = Math.max(1, Math.round(fontSize * 0.06));
+			ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+			ctx.strokeText(text, x, y);
+			ctx.fillStyle = colorToString(color);
+			ctx.fillText(text, x, y);
+			// return measured width so callers can easily center if needed
+			return ctx.measureText(text).width;
+		}  
+		
         function calculatePixelPosition(text, x, charIndex, fontSize = 40) {
             if (charIndex >= text.length) return x;
             
@@ -2319,366 +2245,480 @@ There’s a cricket on the twentieth floor
             ctx.fillText(word, x, y);
         }
         
-        function render() {
-          if (!running) return;
-		  
-		  // sample audio state once per frame (no DOM updates here)
-		  const audioSnapshot = syncAudioUI();
-		  if (audioSnapshot.playingNow !== lastAudioPlaying) {
-	   		// Update the in-memory state first
-			lastAudioPlaying = audioSnapshot.playingNow;
+			function render() {
+			  if (!running) return;
+			  
+			  // sample audio state once per frame (no DOM updates here)
+			  const audioSnapshot = syncAudioUI();
+			  if (audioSnapshot.playingNow !== lastAudioPlaying) {
+				// Update the in-memory state first
+				lastAudioPlaying = audioSnapshot.playingNow;
 
-			// Now reflect that change in the UI (minimal DOM writes)
-			const listenBtn = document.getElementById('listenButton');
-			const playListenBtn = document.getElementById('playListenButton');
-			const emojiSpan = document.getElementById('musicEmojis');
+				// Now reflect that change in the UI (minimal DOM writes)
+				const listenBtn = document.getElementById('listenButton');
+				const playListenBtn = document.getElementById('playListenButton');
+				const emojiSpan = document.getElementById('musicEmojis');
 
-			function setPlayingVisualSimple(btn) {
-				if (!btn) return;
-				btn.classList.remove('paused');
-				btn.textContent = '⏸ PAUSE';
+				function setPlayingVisualSimple(btn) {
+					if (!btn) return;
+					btn.classList.remove('paused');
+					btn.textContent = '⏸ PAUSE';
+				}
+				function setPausedVisualSimple(btn) {
+					if (!btn) return;
+					btn.classList.add('paused');
+					btn.textContent = (btn.dataset && btn.dataset.orig) ? btn.dataset.orig : '▶';
+				}
+
+				if (lastAudioPlaying) {
+					// audio started
+					setPlayingVisualSimple(listenBtn);
+					setPlayingVisualSimple(playListenBtn);
+					if (emojiSpan) emojiSpan.classList.remove('emoji-fill');
+				} else {
+					// audio stopped/paused
+					setPausedVisualSimple(listenBtn);
+					setPausedVisualSimple(playListenBtn);
+					if (emojiSpan) emojiSpan.classList.add('emoji-fill');
+				}
+			  }
+			  
+			  const currentTime = performance.now() / 1000;
+
+			  // Clear canvas
+			  ctx.fillStyle = '#1e1e1e';
+			  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+			  // Draw background (may cover things) — asset-status balls will be drawn last
+			  if (backgroundImage && backgroundImage.complete && backgroundImage.naturalWidth > 0) {
+				  ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+			  }
+
+			  // Draw magnetic tape at top
+			  if (magTapeImage && magTapeImage.complete && magTapeImage.naturalWidth > 0) {
+				  const tapeHeight = canvas.height / 8;
+				  ctx.drawImage(magTapeImage, 0, 0, canvas.width, tapeHeight);
+
+				  // Draw position indicator
+				  if (!waitingForStart && lyrics.length > 0) {
+					  const indicatorWidth = 8;
+					  const positionX = (currentIndex / lyrics.length) * canvas.width;
+					  const indicatorHeight = tapeHeight / 2;
+					  const indicatorY = tapeHeight / 4;
+
+					  const rectX = Math.max(0, Math.min(positionX - indicatorWidth / 2, canvas.width - indicatorWidth));
+
+					  ctx.fillStyle = colorToString([0, 255, 0]);
+					  ctx.fillRect(rectX, indicatorY, indicatorWidth, indicatorHeight);
+
+					  // Draw circle for drag handle
+					  ctx.beginPath();
+					  ctx.arc(rectX + indicatorWidth / 2, indicatorY + indicatorHeight / 2, 5, 0, 2 * Math.PI);
+					  ctx.fillStyle = '#ffffff';
+					  ctx.fill();
+				  }
+			  }
+
+			  // Draw controls image and button outlines
+			  if (controlsImage && controlsImage.complete && controlsImage.naturalWidth > 0) {
+				  const controlsHeight = canvas.height / 3 + 72;
+				  const controlsWidth = (controlsImage.width * controlsHeight) / controlsImage.height;
+				  const controlsY = canvas.height - controlsHeight - 20;
+				  const controlsX = 20;
+
+				  ctx.drawImage(controlsImage, controlsX, controlsY, controlsWidth, controlsHeight);
+
+				  // Draw button outlines for visual feedback
+				  drawButtonOutlines();
+
+				  // Draw line number on controls
+				  if (!waitingForStart) {
+					  ctx.font = 'bold 40px Courier New';
+					  ctx.fillStyle = colorToString([0, 255, 0]);
+					  const progressText = String(songLineNumber).padStart(3, '0');
+					  ctx.fillText(progressText, controlsX + 50, controlsY + 60);
+				  }
+			  }
+
+			  // Rescale button coordinates if controlsImage available
+			  if (controlsImage && controlsImage.complete) {
+				  scaleButtonCoords();
+			  }
+
+			  // Draw title and time signature
+			  if (songData.title) {
+				  renderText(songData.title, 50, POSITION_TITLE, [0, 255, 0]);
+			  }
+			  if (songData.timeSignature) {
+				  renderText(songData.timeSignature, 50, POSITION_TIME_SIGNATURE, [0, 255, 0]);
+			  }
+
+			  // Draw messages
+			  if (waitingForStart && !currentSongKey) {
+				  const message = "Press Play or spacebar";
+				  renderText(message, canvas.width - 1000, canvas.height - 500, [255, 255, 255]);
+			  } else if (waitingForStart) {
+				  const message = currentIndex === 0 ? "Press Play or spacebar" : "Play or spacebar";
+				  renderText(message, canvas.width - 1000, canvas.height - 500, [255, 255, 255]);
+			  }
+
+			  // Draw lyrics, chords, sections, highlighting, etc.
+			  if (lyrics.length > 0 && chords.length > 0 && ((!waitingForStart) || (waitingForStart && currentIndex > 0))) {
+				  const chordText = chords[currentIndex % chords.length].replace(/\[|\]/g, '');
+				  const lyricText = lyrics[currentIndex % lyrics.length];
+
+				  let highlightingActive = false;
+				  const shouldHighlightBall = currentIndex in beatChordWordData && rising;
+
+				  if (shouldHighlightBall) {
+					  const currentBeatData = beatChordWordData[currentIndex];
+					  // Use correct beat number calculation like Python version
+					  const currentBeatNumber = BEAT_NUMBERS.length > 0 ? 
+						  BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length] : (bounceCount + 1);
+
+					  for (const [beatNum, chord, word] of currentBeatData) {
+						  if (beatNum === currentBeatNumber) {
+							  highlightingActive = true;
+
+							  const dt = currentTime - bounceStartTime;
+							  const beatProgress = (dt % BOUNCE_DURATION) / BOUNCE_DURATION;
+							  const beatFactor = rising ? beatProgress : (1.0 - beatProgress);
+
+							  // Render base text
+							  renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+							  renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
+
+							  // Find beat positions and highlight
+							  const beatPositions = findBeatPositions(getRidOfLL(beats[currentIndex]));
+
+							  for (const [bNum, charIndex] of beatPositions) {
+								  if (bNum === beatNum) {
+									  if (word) {
+										  const syllable = extractSyllableAtPosition(lyricText, charIndex);
+										  const pixelX = calculatePixelPosition(lyricText, 50, charIndex);
+										  const highlightColor = interpolateColor([255, 255, 255], [0, 255, 255], beatFactor);
+
+										  // Clear background for highlighted word
+										  ctx.fillStyle = '#1e1e1e';
+										  const syllableWidth = ctx.measureText(syllable).width;
+										  ctx.fillRect(pixelX, POSITION_LYRIC_LINE - 35, syllableWidth, 45);
+
+										  // Draw highlighted syllable
+										  renderWordAtPosition(syllable, pixelX, POSITION_LYRIC_LINE, highlightColor);
+									  }
+
+									  if (chord) {
+										  const pixelX = calculatePixelPosition(chordText, 50, charIndex);
+										  const highlightColor = interpolateColor([255, 165, 0], [255, 255, 0], beatFactor);
+
+										  // Clear background for highlighted chord
+										  ctx.fillStyle = '#1e1e1e';
+										  const chordWidth = ctx.measureText(chord).width;
+										  ctx.fillRect(pixelX, POSITION_CHORDS - 35, chordWidth, 45);
+
+										  // Draw highlighted chord
+										  renderWordAtPosition(chord, pixelX, POSITION_CHORDS, highlightColor);
+									  }
+									  break;
+								  }
+							  }
+							  break;
+						  }
+					  }
+				  }
+
+				  if (!highlightingActive) {
+					  renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+					  renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
+				  }
+
+				  if (sections.length > 0) {
+					  renderText(sections[currentIndex % sections.length], 50, POSITION_SECTION, [0, 0, 255]);
+				  }
+			  }
+
+			  // Update debug info
+			  if (debugMode && debugData) {
+				  let debugText = `Line: ${currentIndex + 1}/${lyrics.length}\n`;
+				  debugText += `Bounce: ${bounceCount}/${BOUNCES_PER_LINE}\n`;
+				  debugText += `Beat Numbers: [${BEAT_NUMBERS.join(', ')}]\n`;
+				  debugText += `Playback Mode: ${playbackMode}\n`;
+				  debugText += `Speed: ${speedLabels[currentSpeedIndex]}\n`;
+				  debugText += `Duration: ${BOUNCE_DURATION.toFixed(3)}s\n`;
+				  if (BEAT_NUMBERS.length > 0) {
+					  const currentBeatNumber = BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length];
+					  debugText += `Current Beat: ${currentBeatNumber}\n`;
+				  }
+				  debugData.innerHTML = debugText.replace(/\n/g, '<br>');
+			  }
+
+			  // Ball physics and movement
+			  if (!songPaused && !waitingForStart && bounceStartTime !== null) {
+				  const dt = currentTime - bounceStartTime;
+
+				  if (dt <= BOUNCE_DURATION) {
+					  const fallTime = BOUNCE_DURATION / 2;
+
+					  if (dt <= fallTime) {
+						  falling = true;
+						  rising = false;
+						  ballY = ballTop + 0.5 * gravity * (dt ** 2);
+						  if (ballY >= ballBottom) ballY = ballBottom;
+					  } else {
+						  const riseTime = dt - fallTime;
+						  falling = false;
+						  rising = true;
+						  const remainingRiseTime = fallTime - riseTime;
+						  ballY = ballTop + 0.5 * gravity * (remainingRiseTime ** 2);
+						  if (ballY < ballTop) ballY = ballTop;
+					  }
+				  } else {
+					  // Complete bounce cycle - start new bounce
+					  bounceStartTime = currentTime;
+					  ballY = ballTop;
+					  bounceCount++;
+
+					  // Advance text every BOUNCES_PER_LINE bounces
+					  if (bounceCount >= BOUNCES_PER_LINE) {
+						  bounceCount = 0;
+						  if (lyrics.length > 0) {
+							  if (currentIndex < lyrics.length - 1) {
+								  currentIndex++;
+								  songLineNumber++;
+							  } else {
+								  waitingForStart = true;
+								  updatePlayButton();
+							  }
+						  }
+					  }
+				  }
+			  } else if (waitingForStart) {
+				  ballY = BALL_HIGH_POSITION;
+			  }
+
+			  // Draw ball with highlighting
+			  const shouldHighlightBall = currentIndex in beatChordWordData && rising && BEAT_NUMBERS.length > 0 &&
+				  beatChordWordData[currentIndex].some(([beatNum]) => beatNum === BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length]);
+
+			  ctx.beginPath();
+			  ctx.arc(ballCenterX, ballY, ballRadius, 0, 2 * Math.PI);
+			  ctx.fillStyle = shouldHighlightBall ? '#00ff00' : '#ee7621';
+			  ctx.fill();
+
+			  // draw emojis for audio playing indicator
+			  drawMusicEmojis();
+
+			  // draw the asset-status balls LAST so they're visible on top of background/controls
+			  drawAssetStatusBallsOnCanvas();
+
+			  requestAnimationFrame(render);
 			}
-			function setPausedVisualSimple(btn) {
-				if (!btn) return;
-				btn.classList.add('paused');
-				btn.textContent = (btn.dataset && btn.dataset.orig) ? btn.dataset.orig : '▶';
-			}
-
-			if (lastAudioPlaying) {
-				// audio started
-				setPlayingVisualSimple(listenBtn);
-				setPlayingVisualSimple(playListenBtn);
-				if (emojiSpan) emojiSpan.classList.remove('emoji-fill');
-			} else {
-				// audio stopped/paused
-				setPausedVisualSimple(listenBtn);
-				setPausedVisualSimple(playListenBtn);
-				if (emojiSpan) emojiSpan.classList.add('emoji-fill');
-			}
-		  }
-		  
-          const currentTime = performance.now() / 1000;
-
-          // Clear canvas
-          ctx.fillStyle = '#1e1e1e';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-          // Draw background (may cover things) — asset-status balls will be drawn last
-          if (backgroundImage && backgroundImage.complete && backgroundImage.naturalWidth > 0) {
-              ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
-          }
-
-          // Draw magnetic tape at top
-          if (magTapeImage && magTapeImage.complete && magTapeImage.naturalWidth > 0) {
-              const tapeHeight = canvas.height / 8;
-              ctx.drawImage(magTapeImage, 0, 0, canvas.width, tapeHeight);
-
-              // Draw position indicator
-              if (!waitingForStart && lyrics.length > 0) {
-                  const indicatorWidth = 8;
-                  const positionX = (currentIndex / lyrics.length) * canvas.width;
-                  const indicatorHeight = tapeHeight / 2;
-                  const indicatorY = tapeHeight / 4;
-
-                  const rectX = Math.max(0, Math.min(positionX - indicatorWidth / 2, canvas.width - indicatorWidth));
-
-                  ctx.fillStyle = colorToString([0, 255, 0]);
-                  ctx.fillRect(rectX, indicatorY, indicatorWidth, indicatorHeight);
-
-                  // Draw circle for drag handle
-                  ctx.beginPath();
-                  ctx.arc(rectX + indicatorWidth / 2, indicatorY + indicatorHeight / 2, 5, 0, 2 * Math.PI);
-                  ctx.fillStyle = '#ffffff';
-                  ctx.fill();
-              }
-          }
-
-          // Draw controls image and button outlines
-          if (controlsImage && controlsImage.complete && controlsImage.naturalWidth > 0) {
-              const controlsHeight = canvas.height / 3 + 72;
-              const controlsWidth = (controlsImage.width * controlsHeight) / controlsImage.height;
-              const controlsY = canvas.height - controlsHeight - 20;
-              const controlsX = 20;
-
-              ctx.drawImage(controlsImage, controlsX, controlsY, controlsWidth, controlsHeight);
-
-              // Draw button outlines for visual feedback
-              drawButtonOutlines();
-
-              // Draw line number on controls
-              if (!waitingForStart) {
-                  ctx.font = 'bold 40px Courier New';
-                  ctx.fillStyle = colorToString([0, 255, 0]);
-                  const progressText = String(songLineNumber).padStart(3, '0');
-                  ctx.fillText(progressText, controlsX + 50, controlsY + 60);
-              }
-          }
-
-          // Rescale button coordinates if controlsImage available
-          if (controlsImage && controlsImage.complete) {
-              scaleButtonCoords();
-          }
-
-          // Draw title and time signature
-          if (songData.title) {
-              renderText(songData.title, 50, POSITION_TITLE, [0, 255, 0]);
-          }
-          if (songData.timeSignature) {
-              renderText(songData.timeSignature, 50, POSITION_TIME_SIGNATURE, [0, 255, 0]);
-          }
-
-          // Draw messages
-          if (waitingForStart && !currentSongKey) {
-              const message = "Select a song to begin";
-              renderText(message, canvas.width - 400, canvas.height - 100, [255, 255, 255]);
-          } else if (waitingForStart) {
-              const message = currentIndex === 0 ? "Tap to bounce" : "Tap to restart";
-              renderText(message, canvas.width - 300, canvas.height - 100, [255, 255, 255]);
-          }
-
-          // Draw lyrics, chords, sections, highlighting, etc.
-          if (lyrics.length > 0 && chords.length > 0 && ((!waitingForStart) || (waitingForStart && currentIndex > 0))) {
-              const chordText = chords[currentIndex % chords.length].replace(/\[|\]/g, '');
-              const lyricText = lyrics[currentIndex % lyrics.length];
-
-              let highlightingActive = false;
-              const shouldHighlightBall = currentIndex in beatChordWordData && rising;
-
-              if (shouldHighlightBall) {
-                  const currentBeatData = beatChordWordData[currentIndex];
-                  // Use correct beat number calculation like Python version
-                  const currentBeatNumber = BEAT_NUMBERS.length > 0 ? 
-                      BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length] : (bounceCount + 1);
-
-                  for (const [beatNum, chord, word] of currentBeatData) {
-                      if (beatNum === currentBeatNumber) {
-                          highlightingActive = true;
-
-                          const dt = currentTime - bounceStartTime;
-                          const beatProgress = (dt % BOUNCE_DURATION) / BOUNCE_DURATION;
-                          const beatFactor = rising ? beatProgress : (1.0 - beatProgress);
-
-                          // Render base text
-                          renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
-                          renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
-
-                          // Find beat positions and highlight
-                          const beatPositions = findBeatPositions(getRidOfLL(beats[currentIndex]));
-
-                          for (const [bNum, charIndex] of beatPositions) {
-                              if (bNum === beatNum) {
-                                  if (word) {
-                                      const syllable = extractSyllableAtPosition(lyricText, charIndex);
-                                      const pixelX = calculatePixelPosition(lyricText, 50, charIndex);
-                                      const highlightColor = interpolateColor([255, 255, 255], [0, 255, 255], beatFactor);
-
-                                      // Clear background for highlighted word
-                                      ctx.fillStyle = '#1e1e1e';
-                                      const syllableWidth = ctx.measureText(syllable).width;
-                                      ctx.fillRect(pixelX, POSITION_LYRIC_LINE - 35, syllableWidth, 45);
-
-                                      // Draw highlighted syllable
-                                      renderWordAtPosition(syllable, pixelX, POSITION_LYRIC_LINE, highlightColor);
-                                  }
-
-                                  if (chord) {
-                                      const pixelX = calculatePixelPosition(chordText, 50, charIndex);
-                                      const highlightColor = interpolateColor([255, 165, 0], [255, 255, 0], beatFactor);
-
-                                      // Clear background for highlighted chord
-                                      ctx.fillStyle = '#1e1e1e';
-                                      const chordWidth = ctx.measureText(chord).width;
-                                      ctx.fillRect(pixelX, POSITION_CHORDS - 35, chordWidth, 45);
-
-                                      // Draw highlighted chord
-                                      renderWordAtPosition(chord, pixelX, POSITION_CHORDS, highlightColor);
-                                  }
-                                  break;
-                              }
-                          }
-                          break;
-                      }
-                  }
-              }
-
-              if (!highlightingActive) {
-                  renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
-                  renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
-              }
-
-              if (sections.length > 0) {
-                  renderText(sections[currentIndex % sections.length], 50, POSITION_SECTION, [0, 0, 255]);
-              }
-          }
-
-          // Update debug info
-          if (debugMode && debugData) {
-              let debugText = `Line: ${currentIndex + 1}/${lyrics.length}\n`;
-              debugText += `Bounce: ${bounceCount}/${BOUNCES_PER_LINE}\n`;
-              debugText += `Beat Numbers: [${BEAT_NUMBERS.join(', ')}]\n`;
-              debugText += `Playback Mode: ${playbackMode}\n`;
-              debugText += `Speed: ${speedLabels[currentSpeedIndex]}\n`;
-              debugText += `Duration: ${BOUNCE_DURATION.toFixed(3)}s\n`;
-              if (BEAT_NUMBERS.length > 0) {
-                  const currentBeatNumber = BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length];
-                  debugText += `Current Beat: ${currentBeatNumber}\n`;
-              }
-              debugData.innerHTML = debugText.replace(/\n/g, '<br>');
-          }
-
-          // Ball physics and movement
-          if (!songPaused && !waitingForStart && bounceStartTime !== null) {
-              const dt = currentTime - bounceStartTime;
-
-              if (dt <= BOUNCE_DURATION) {
-                  const fallTime = BOUNCE_DURATION / 2;
-
-                  if (dt <= fallTime) {
-                      falling = true;
-                      rising = false;
-                      ballY = ballTop + 0.5 * gravity * (dt ** 2);
-                      if (ballY >= ballBottom) ballY = ballBottom;
-                  } else {
-                      const riseTime = dt - fallTime;
-                      falling = false;
-                      rising = true;
-                      const remainingRiseTime = fallTime - riseTime;
-                      ballY = ballTop + 0.5 * gravity * (remainingRiseTime ** 2);
-                      if (ballY < ballTop) ballY = ballTop;
-                  }
-              } else {
-                  // Complete bounce cycle - start new bounce
-                  bounceStartTime = currentTime;
-                  ballY = ballTop;
-                  bounceCount++;
-
-                  // Advance text every BOUNCES_PER_LINE bounces
-                  if (bounceCount >= BOUNCES_PER_LINE) {
-                      bounceCount = 0;
-                      if (lyrics.length > 0) {
-                          if (currentIndex < lyrics.length - 1) {
-                              currentIndex++;
-                              songLineNumber++;
-                          } else {
-                              waitingForStart = true;
-                              updatePlayButton();
-                          }
-                      }
-                  }
-              }
-          } else if (waitingForStart) {
-              ballY = BALL_HIGH_POSITION;
-          }
-
-          // Draw ball with highlighting
-          const shouldHighlightBall = currentIndex in beatChordWordData && rising && BEAT_NUMBERS.length > 0 &&
-              beatChordWordData[currentIndex].some(([beatNum]) => beatNum === BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length]);
-
-          ctx.beginPath();
-          ctx.arc(ballCenterX, ballY, ballRadius, 0, 2 * Math.PI);
-          ctx.fillStyle = shouldHighlightBall ? '#00ff00' : '#ee7621';
-          ctx.fill();
-
-          // draw emojis for audio playing indicator
-          drawMusicEmojis();
-
-          // draw the asset-status balls LAST so they're visible on top of background/controls
-          drawAssetStatusBallsOnCanvas();
-
-          requestAnimationFrame(render);
-        }
-        
-        // Initialize and start
-        initBallPhysics();
-        updatePlayButton();
-        render();
-        
-        // Make canvas focusable for keyboard input
-        canvas.setAttribute('tabindex', '0');
-        canvas.focus();
-        
-        // Handle window resize
-        window.addEventListener('resize', function() {
-            resizeCanvas();
-            initBallPhysics();
-            scaleButtonCoords();
-        });
-		
-		
-		function drawAssetStatusBallsOnCanvas() {
-			const assets = [
-				{ key: 'tape_deck', label: 'tape_deck' },
-				{ key: 'mag_tape', label: 'mag tape' },
-				{ key: 'background', label: 'background' },
-				{ key: 'song', label: 'song' }
-			];
-
-			const statusColors = {
-				grey: "#cccccc",
-				green: "#2ecc40",
-				orange: "#ff9800",
-				purple: "#a020f0",
-				pink: "#ff69b4",
-				black: "#222222"
-			};
-
-			const radius = 14;
-			const spacing = 95; // distance between ball centers
-			const groupWidth = (assets.length - 1) * spacing;
-
-			// Move the group down by about 1 inch (96 px).
-			// Change EXTRA_PIXELS if you want a different offset.
-			const EXTRA_PIXELS = 96;
-
-			// Default fallback near top-right (moved down by EXTRA_PIXELS)
-			let baseX = Math.max(10, canvas.width - 20 - groupWidth); // leftmost center x
-			let baseY = 110 + EXTRA_PIXELS; // fallback Y moved down
-
-			const speedEl = document.getElementById('speedControl');
-			if (speedEl) {
-				const speedRect = speedEl.getBoundingClientRect();
-				const canvasRect = canvas.getBoundingClientRect();
-
-				// right edge of the speed control relative to the canvas
-				const controlRight = Math.round(speedRect.right - canvasRect.left);
-
-				// leftmost center x so the group is right-aligned under the control
-				baseX = controlRight - groupWidth;
-
-				// Y just below the control (8px gap) plus EXTRA_PIXELS
-				baseY = Math.round((speedRect.bottom - canvasRect.top) + 8 + radius + EXTRA_PIXELS);
-			}
-
-			// Clamp to canvas bounds so balls are visible
-			baseX = Math.max(radius + 4, Math.min(baseX, canvas.width - radius - (assets.length - 1) * spacing - 4));
-			baseY = Math.max(radius + 4, Math.min(baseY, canvas.height - radius - 4));
-
-			assets.forEach((asset, i) => {
-				const status = assetStatus[asset.key] || "grey";
-				const color = statusColors[status] || "#cccccc";
-				const x = Math.round(baseX + i * spacing);
-				const y = Math.round(baseY);
-
-				// Draw the ball
-				ctx.beginPath();
-				ctx.arc(x, y, radius, 0, 2 * Math.PI);
-				ctx.fillStyle = color;
-				ctx.fill();
-				ctx.strokeStyle = "#444";
-				ctx.lineWidth = 2;
-				ctx.stroke();
-
-				// Label below the ball
-				ctx.font = "bold 14px Courier New";
-				ctx.fillStyle = "#fff";
-				ctx.textAlign = "center";
-				ctx.fillText(asset.label, x, y + radius + 18);
+			
+			// Initialize and start
+			initBallPhysics();
+			updatePlayButton();
+			render();
+			
+			// Make canvas focusable for keyboard input
+			canvas.setAttribute('tabindex', '0');
+			canvas.focus();
+			
+			// Handle window resize
+			window.addEventListener('resize', function() {
+				resizeCanvas();
+				initBallPhysics();
+				scaleButtonCoords();
 			});
+		
+		
 
-			// restore alignment
-			ctx.textAlign = "left";
-		}		
+		// Defensive, non-throwing drawAssetStatusBallsOnCanvas()
+		// Anchors the leftmost ball under the Listen-button arrow.
+		// Does NOT create placeholder balls if no assets array is present.
 
+
+
+		function drawAssetStatusBallsOnCanvas() {
+		  try {
+			if (typeof canvas === 'undefined' || !canvas || !canvas.getContext) return;
+			const ctx = canvas.getContext('2d');
+			if (!ctx) return;
+
+			// Small vertical offset (pixels) to move the balls further below the buttons.
+			// Increase to push balls lower, decrease to raise them.
+			const STATUS_BALL_VERTICAL_OFFSET = (typeof window.STATUS_BALL_VERTICAL_OFFSET !== 'undefined') ? window.STATUS_BALL_VERTICAL_OFFSET : 14;
+
+			function statusToColor(s) {
+			  if (!s) return '#999999';
+			  if (typeof s === 'string') {
+				const ss = s.toLowerCase();
+				if (ss === 'grey' || ss === 'gray') return '#999999';
+				if (ss === 'green') return '#00cc66';
+				if (ss === 'black') return '#000000';
+				if (ss === 'red') return '#cc3333';
+				return s;
+			  }
+			  return '#00cc66';
+			}
+
+			// --- find assets (read-only) ---
+			let assetsArr = null;
+			try {
+			  if (typeof assets !== 'undefined' && Array.isArray(assets) && assets.length) assetsArr = assets;
+			  else if (typeof assetList !== 'undefined' && Array.isArray(assetList) && assetList.length) assetsArr = assetList;
+			} catch (e) { /* ignore */ }
+
+			if (!assetsArr) {
+			  const statusObj = (typeof assetStatus !== 'undefined') ? assetStatus : (window && window.assetStatus);
+			  if (statusObj && typeof statusObj === 'object' && !Array.isArray(statusObj)) {
+				assetsArr = Object.keys(statusObj).map(k => ({ name: k, status: statusObj[k] }));
+			  }
+			}
+
+			if (!assetsArr || assetsArr.length === 0) return;
+
+			const count = assetsArr.length;
+			const radius = (typeof STATUS_BALL_RADIUS !== 'undefined') ? STATUS_BALL_RADIUS : 14;
+			const spacing = (typeof STATUS_BALL_SPACING !== 'undefined') ? STATUS_BALL_SPACING : Math.round(radius * 2.6);
+
+			// --- compute slot centers from visible buttons in #controlRow ---
+			const canvasRect = canvas.getBoundingClientRect();
+			let slotCenters = [];
+
+			try {
+			  const controlRow = document.getElementById('controlRow');
+			  if (controlRow) {
+				// Prefer visible buttons inside the controlRow (DOM order)
+				const buttons = Array.from(controlRow.querySelectorAll('button, [role="button"]'));
+				for (const b of buttons) {
+				  try {
+					const r = b.getBoundingClientRect();
+					if (r.width > 0 && r.height > 0) {
+					  // Convert page (viewport) coords to canvas-local coords
+					  const cx = Math.round(r.left + r.width / 2 - canvasRect.left);
+					  const cyUnder = Math.round(r.bottom - canvasRect.top); // point just under the element
+					  slotCenters.push({ x: cx, y: cyUnder + STATUS_BALL_VERTICAL_OFFSET, el: b });
+					}
+				  } catch (e) { /* ignore measurement errors */ }
+				}
+			  }
+			} catch (e) { /* ignore */ }
+
+			// fallback: use scaledButtonCoords (tape-machine drawing coordinates), mapped to canvas coords
+			if (slotCenters.length === 0 && typeof scaledButtonCoords !== 'undefined' && Object.keys(scaledButtonCoords).length > 0) {
+			  const centers = [];
+			  for (const [name, poly] of Object.entries(scaledButtonCoords)) {
+				if (!poly || poly.length === 0) continue;
+				let sx = 0, sy = 0;
+				for (const p of poly) { sx += p[0]; sy += p[1]; }
+				const cx = Math.round(sx / poly.length);
+				const cy = Math.round(sy / poly.length);
+				centers.push({ x: cx, y: cy, name });
+			  }
+			  centers.sort((a, b) => a.x - b.x);
+			  for (const c of centers) slotCenters.push({ x: c.x, y: c.y + STATUS_BALL_VERTICAL_OFFSET, el: null });
+			}
+
+			// fallback: anchor under listenButton (legacy behavior)
+			if (slotCenters.length === 0) {
+			  const listenBtn = document.getElementById('listenButton');
+			  if (listenBtn) {
+				try {
+				  const r = listenBtn.getBoundingClientRect();
+				  const arrowOffset = Math.max(6, Math.round(r.width * 0.12));
+				  const arrowCenterX = Math.round(r.left - canvasRect.left + arrowOffset);
+				  const baseX = arrowCenterX - radius;
+				  const baseY = Math.round(r.top - canvasRect.top + r.height + 8) + STATUS_BALL_VERTICAL_OFFSET;
+				  for (let i = 0; i < count; i++) {
+					slotCenters.push({ x: Math.round(baseX + i * spacing), y: baseY, el: null });
+				  }
+				} catch (e) { /* ignore */ }
+			  }
+			}
+
+			// final fallback: bottom-center
+			if (slotCenters.length === 0) {
+			  const totalWidth = (count - 1) * spacing + radius * 2;
+			  const startX = Math.round((canvas.width - totalWidth) / 2) + radius;
+			  const baseY = canvas.height - radius - 24;
+			  for (let i = 0; i < count; i++) slotCenters.push({ x: startX + i * spacing, y: baseY, el: null });
+			}
+
+			// If there are fewer slots than assets, expand across available width
+			if (slotCenters.length > 0 && slotCenters.length < count) {
+			  const first = slotCenters[0].x;
+			  const last = slotCenters[slotCenters.length - 1].x;
+			  const expanded = [];
+			  const groupW = Math.max(1, last - first);
+			  for (let i = 0; i < count; i++) {
+				const t = (count === 1) ? 0 : (i / (count - 1));
+				const x = Math.round(first + t * groupW);
+				const y = slotCenters[0].y;
+				expanded.push({ x, y, el: null });
+			  }
+			  slotCenters = expanded;
+			}
+
+			// Clamp inside canvas
+			for (let s of slotCenters) {
+			  s.x = Math.max(radius + 4, Math.min(s.x, canvas.width - radius - 4));
+			  s.y = Math.max(radius + 4, Math.min(s.y, canvas.height - radius - 4));
+			}
+
+			// --- draw balls ---
+			ctx.save();
+			for (let i = 0; i < count; i++) {
+			  const raw = assetsArr[i] || {};
+			  let name = '';
+			  let color = null;
+			  if (typeof raw === 'string') {
+				name = raw;
+			  } else {
+				name = raw.name || raw.label || raw.id || '';
+				if (raw.color) color = raw.color;
+				if (!color && raw.fill) color = raw.fill;
+				if (!color && raw.status) color = statusToColor(raw.status);
+			  }
+			  if (!color && typeof getAssetColor === 'function') {
+				try { color = getAssetColor(name); } catch (e) { /* ignore */ }
+			  }
+			  if (!color) color = '#00cc66';
+			  const stroke = '#006633';
+
+			  const slot = slotCenters[i % slotCenters.length];
+			  const x = slot.x;
+			  const y = slot.y;
+
+			  ctx.beginPath();
+			  ctx.arc(x, y, radius, 0, Math.PI * 2);
+			  ctx.fillStyle = color;
+			  ctx.fill();
+			  ctx.lineWidth = 3;
+			  ctx.strokeStyle = stroke;
+			  ctx.stroke();
+
+			  const label = (name || (raw && (raw.text || raw.label))) || '';
+			  if (label) {
+				const fontSize = Math.max(10, Math.round(radius * 0.75));
+				ctx.font = fontSize + "px 'Courier New', monospace";
+				ctx.textAlign = 'center';
+				ctx.textBaseline = 'bottom';
+				ctx.lineWidth = 1.25;
+				ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+				ctx.strokeText(label, x, y - radius - 6);
+				ctx.fillStyle = '#ffffff';
+				ctx.fillText(label, x, y - radius - 6);
+			  }
+			}
+			ctx.restore();
+
+		  } catch (err) {
+			console.error('drawAssetStatusBallsOnCanvas error:', err);
+		  }
+		}
+
+
+		
 		(function() {
 			// Defensive init after DOM is ready
 			function initListeningButtons() {
