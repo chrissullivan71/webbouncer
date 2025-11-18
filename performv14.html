@@ -35,30 +35,30 @@ Copyright (c) 2025 Chris Sullivan. All rights reserved.
 			pointer-events: auto;
 		  }
 
-			/* Song selector: place 122px down and aligned to the right; limit width so it won't span the page */
-			#songSelector {
-			  position: absolute;
-			  top: 82px;            /* 82px below top of viewport (under the mag-tape) */
-			  right: 10px;           /* align near right edge; change to 0px if you want flush */
-			  z-index: 2500;
-			  padding: 8px 10px;
-			  border-radius: 6px;
-			  border: 2px solid #00ff00;
-			  background: rgba(0,0,0,0.7);
-			  color: #fff;
-			  font-family: 'Courier New', monospace;
-			  font-size: 14px;
-			  box-sizing: border-box;
+		/* Song selector: place 122px down and aligned to the right; limit width so it won't span the page */
+		#songSelector {
+		  position: absolute;
+		  top: 82px;            /* 82px below top of viewport (under the mag-tape) */
+		  right: 10px;           /* align near right edge; change to 0px if you want flush */
+		  z-index: 2500;
+		  padding: 8px 10px;
+		  border-radius: 6px;
+		  border: 2px solid #00ff00;
+		  background: rgba(0,0,0,0.7);
+		  color: #fff;
+		  font-family: 'Courier New', monospace;
+		  font-size: 14px;
+		  box-sizing: border-box;
 
-			  /* prevent full-width stretching */
-			  width: auto;           /* let the selector size to its contents */
-			  min-width: 160px;      /* minimum usable size */
-			  max-width: 420px;      /* caps width so it won't span the canvas */
-			  display: inline-block; /* avoid block-level width expansion */
-			  overflow: hidden;
-			  text-overflow: ellipsis;
-			  white-space: nowrap;
-			}
+		  /* prevent full-width stretching */
+		  width: auto;           /* let the selector size to its contents */
+		  min-width: 160px;      /* minimum usable size */
+		  max-width: 420px;      /* caps width so it won't span the canvas */
+		  display: inline-block; /* avoid block-level width expansion */
+		  overflow: hidden;
+		  text-overflow: ellipsis;
+		  white-space: nowrap;
+		}
 
 		  /* Right-side help block */
 		  #controls {
@@ -791,6 +791,8 @@ There’s a cricket on the twentieth floor
 		  });
 		}
 
+		
+		
 		// let musicIsPlaying = false;
 		function isAudioActuallyPlaying() {
 			return !audioElement.paused && !audioElement.ended && audioElement.currentTime > 0;
@@ -873,7 +875,10 @@ There’s a cricket on the twentieth floor
             return coords.map(coord => [coord[0] + offsetX, coord[1] + offsetY]);
         }
 
-        function scaleButtonCoords() {
+
+   
+
+	   function scaleButtonCoords() {
             if (!controlsImage || !controlsImage.complete) return;
             
             scaledButtonCoords = {};
@@ -2531,193 +2536,74 @@ There’s a cricket on the twentieth floor
 			});
 		
 		
-
-		// Defensive, non-throwing drawAssetStatusBallsOnCanvas()
-		// Anchors the leftmost ball under the Listen-button arrow.
-		// Does NOT create placeholder balls if no assets array is present.
-
-
-
 		function drawAssetStatusBallsOnCanvas() {
-		  try {
-			if (typeof canvas === 'undefined' || !canvas || !canvas.getContext) return;
-			const ctx = canvas.getContext('2d');
-			if (!ctx) return;
+		  const ctx = canvas.getContext('2d');
 
-			// Small vertical offset (pixels) to move the balls further below the buttons.
-			// Increase to push balls lower, decrease to raise them.
-			const STATUS_BALL_VERTICAL_OFFSET = (typeof window.STATUS_BALL_VERTICAL_OFFSET !== 'undefined') ? window.STATUS_BALL_VERTICAL_OFFSET : 14;
+		  // Fixed visual constants
+		  const OFFSETX = 60;
+		  const OFFSETY = 60;
+		  const RADIUS = 14;
+		  const DEFAULT_FILL_COLOR = '#00cc66';
+		  const POSITIONS = [
+			{ x: 120+OFFSETX, y: 540+OFFSETY },
+			{ x: 200+OFFSETX, y: 540+OFFSETY },
+			{ x: 280+OFFSETX, y: 540+OFFSETY },
+			{ x: 360+OFFSETX, y: 540+OFFSETY },
+			{ x: 440+OFFSETX, y: 540+OFFSETY }
+		  ];
 
-			function statusToColor(s) {
-			  if (!s) return '#999999';
-			  if (typeof s === 'string') {
-				const ss = s.toLowerCase();
-				if (ss === 'grey' || ss === 'gray') return '#999999';
-				if (ss === 'green') return '#00cc66';
-				if (ss === 'black') return '#000000';
-				if (ss === 'red') return '#cc3333';
-				return s;
-			  }
-			  return '#00cc66';
+		  ctx.save();
+
+		  // Use assetStatus -> array
+		  const assetsArr = Object.keys(assetStatus).map(k => ({ name: k, status: assetStatus[k] }));
+
+		  for (let i = 0; i < assetsArr.length; i++) {
+			const item = assetsArr[i];
+
+			// Internal name
+			const name = (typeof item === 'string') ? item : (item.name || item.label || item.id || '');
+
+			// Determine fill color (explicit fields first, then status keywords)
+			let color = DEFAULT_FILL_COLOR;
+			if (item && (item.color || item.fill)) {
+			  color = item.color || item.fill;
+			} else if (item && item.status) {
+			  const st = String(item.status).toLowerCase();
+			  if (st === 'grey' || st === 'gray') color = '#999999';
+			  else if (st === 'green') color = '#00cc66';
+			  else if (st === 'black') color = '#000000';
+			  else if (st === 'red') color = '#cc3333';
+			  else color = DEFAULT_FILL_COLOR;
 			}
 
-			// --- find assets (read-only) ---
-			let assetsArr = null;
-			try {
-			  if (typeof assets !== 'undefined' && Array.isArray(assets) && assets.length) assetsArr = assets;
-			  else if (typeof assetList !== 'undefined' && Array.isArray(assetList) && assetList.length) assetsArr = assetList;
-			} catch (e) { /* ignore */ }
+			// Fixed position selection (overflow reuses last slot)
+			const pos = (i < POSITIONS.length) ? POSITIONS[i] : POSITIONS[POSITIONS.length - 1];
+			const x = pos.x;
+			const y = pos.y;
 
-			if (!assetsArr) {
-			  const statusObj = (typeof assetStatus !== 'undefined') ? assetStatus : (window && window.assetStatus);
-			  if (statusObj && typeof statusObj === 'object' && !Array.isArray(statusObj)) {
-				assetsArr = Object.keys(statusObj).map(k => ({ name: k, status: statusObj[k] }));
-			  }
+			// Draw filled circle (no stroke)
+			ctx.beginPath();
+			ctx.arc(x, y, RADIUS, 0, Math.PI * 2);
+			ctx.fillStyle = color;
+			ctx.fill();
+
+			// Friendly label (prefer assetLabels), always solid white and centered on the ball
+			let label = '';
+			if (assetLabels && name && assetLabels[name]) label = assetLabels[name];
+			else if (name) label = String(name).replace(/_/g, ' ');
+			else if (item && (item.text || item.label)) label = item.text || item.label;
+
+			if (label) {
+			  ctx.fillStyle = '#ffffff';
+			  ctx.font = "bold 12px 'Courier New', monospace";
+			  ctx.textAlign = 'center';
+			  ctx.textBaseline = 'middle';
+			  ctx.fillText(label, x, y); // intentionally drawn on top of the ball
 			}
-
-			if (!assetsArr || assetsArr.length === 0) return;
-
-			const count = assetsArr.length;
-			const radius = (typeof STATUS_BALL_RADIUS !== 'undefined') ? STATUS_BALL_RADIUS : 14;
-			const spacing = (typeof STATUS_BALL_SPACING !== 'undefined') ? STATUS_BALL_SPACING : Math.round(radius * 2.6);
-
-			// --- compute slot centers from visible buttons in #controlRow ---
-			const canvasRect = canvas.getBoundingClientRect();
-			let slotCenters = [];
-
-			try {
-			  const controlRow = document.getElementById('controlRow');
-			  if (controlRow) {
-				// Prefer visible buttons inside the controlRow (DOM order)
-				const buttons = Array.from(controlRow.querySelectorAll('button, [role="button"]'));
-				for (const b of buttons) {
-				  try {
-					const r = b.getBoundingClientRect();
-					if (r.width > 0 && r.height > 0) {
-					  // Convert page (viewport) coords to canvas-local coords
-					  const cx = Math.round(r.left + r.width / 2 - canvasRect.left);
-					  const cyUnder = Math.round(r.bottom - canvasRect.top); // point just under the element
-					  slotCenters.push({ x: cx, y: cyUnder + STATUS_BALL_VERTICAL_OFFSET, el: b });
-					}
-				  } catch (e) { /* ignore measurement errors */ }
-				}
-			  }
-			} catch (e) { /* ignore */ }
-
-			// fallback: use scaledButtonCoords (tape-machine drawing coordinates), mapped to canvas coords
-			if (slotCenters.length === 0 && typeof scaledButtonCoords !== 'undefined' && Object.keys(scaledButtonCoords).length > 0) {
-			  const centers = [];
-			  for (const [name, poly] of Object.entries(scaledButtonCoords)) {
-				if (!poly || poly.length === 0) continue;
-				let sx = 0, sy = 0;
-				for (const p of poly) { sx += p[0]; sy += p[1]; }
-				const cx = Math.round(sx / poly.length);
-				const cy = Math.round(sy / poly.length);
-				centers.push({ x: cx, y: cy, name });
-			  }
-			  centers.sort((a, b) => a.x - b.x);
-			  for (const c of centers) slotCenters.push({ x: c.x, y: c.y + STATUS_BALL_VERTICAL_OFFSET, el: null });
-			}
-
-			// fallback: anchor under listenButton (legacy behavior)
-			if (slotCenters.length === 0) {
-			  const listenBtn = document.getElementById('listenButton');
-			  if (listenBtn) {
-				try {
-				  const r = listenBtn.getBoundingClientRect();
-				  const arrowOffset = Math.max(6, Math.round(r.width * 0.12));
-				  const arrowCenterX = Math.round(r.left - canvasRect.left + arrowOffset);
-				  const baseX = arrowCenterX - radius;
-				  const baseY = Math.round(r.top - canvasRect.top + r.height + 8) + STATUS_BALL_VERTICAL_OFFSET;
-				  for (let i = 0; i < count; i++) {
-					slotCenters.push({ x: Math.round(baseX + i * spacing), y: baseY, el: null });
-				  }
-				} catch (e) { /* ignore */ }
-			  }
-			}
-
-			// final fallback: bottom-center
-			if (slotCenters.length === 0) {
-			  const totalWidth = (count - 1) * spacing + radius * 2;
-			  const startX = Math.round((canvas.width - totalWidth) / 2) + radius;
-			  const baseY = canvas.height - radius - 24;
-			  for (let i = 0; i < count; i++) slotCenters.push({ x: startX + i * spacing, y: baseY, el: null });
-			}
-
-			// If there are fewer slots than assets, expand across available width
-			if (slotCenters.length > 0 && slotCenters.length < count) {
-			  const first = slotCenters[0].x;
-			  const last = slotCenters[slotCenters.length - 1].x;
-			  const expanded = [];
-			  const groupW = Math.max(1, last - first);
-			  for (let i = 0; i < count; i++) {
-				const t = (count === 1) ? 0 : (i / (count - 1));
-				const x = Math.round(first + t * groupW);
-				const y = slotCenters[0].y;
-				expanded.push({ x, y, el: null });
-			  }
-			  slotCenters = expanded;
-			}
-
-			// Clamp inside canvas
-			for (let s of slotCenters) {
-			  s.x = Math.max(radius + 4, Math.min(s.x, canvas.width - radius - 4));
-			  s.y = Math.max(radius + 4, Math.min(s.y, canvas.height - radius - 4));
-			}
-
-			// --- draw balls ---
-			ctx.save();
-			for (let i = 0; i < count; i++) {
-			  const raw = assetsArr[i] || {};
-			  let name = '';
-			  let color = null;
-			  if (typeof raw === 'string') {
-				name = raw;
-			  } else {
-				name = raw.name || raw.label || raw.id || '';
-				if (raw.color) color = raw.color;
-				if (!color && raw.fill) color = raw.fill;
-				if (!color && raw.status) color = statusToColor(raw.status);
-			  }
-			  if (!color && typeof getAssetColor === 'function') {
-				try { color = getAssetColor(name); } catch (e) { /* ignore */ }
-			  }
-			  if (!color) color = '#00cc66';
-			  const stroke = '#006633';
-
-			  const slot = slotCenters[i % slotCenters.length];
-			  const x = slot.x;
-			  const y = slot.y;
-
-			  ctx.beginPath();
-			  ctx.arc(x, y, radius, 0, Math.PI * 2);
-			  ctx.fillStyle = color;
-			  ctx.fill();
-			  ctx.lineWidth = 3;
-			  ctx.strokeStyle = stroke;
-			  ctx.stroke();
-
-			  const label = (name || (raw && (raw.text || raw.label))) || '';
-			  if (label) {
-				const fontSize = Math.max(10, Math.round(radius * 0.75));
-				ctx.font = fontSize + "px 'Courier New', monospace";
-				ctx.textAlign = 'center';
-				ctx.textBaseline = 'bottom';
-				ctx.lineWidth = 1.25;
-				ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-				ctx.strokeText(label, x, y - radius - 6);
-				ctx.fillStyle = '#ffffff';
-				ctx.fillText(label, x, y - radius - 6);
-			  }
-			}
-			ctx.restore();
-
-		  } catch (err) {
-			console.error('drawAssetStatusBallsOnCanvas error:', err);
 		  }
+
+		  ctx.restore();
 		}
-
-
 		
 		(function() {
 			// Defensive init after DOM is ready
