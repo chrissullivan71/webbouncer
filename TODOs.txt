@@ -1,0 +1,29 @@
+Add The Visitor V2 files  
+Add the-visitor.txt and the-visitor.json to the repo root.
+
+Ensure loader remains backwards-compatible  
+Loader must not fail or change behavior for V1 songs.
+
+Pause buttons pause everything  
+All pause controls must halt audio, animations, timers and playback immediately.
+
+Create feature branch for V2 work  
+Make a focused branch for adding The Visitor and V2 enforcement changes.
+
+Add visible V1/V2 indicator in UI  
+
+Add README notes about V1 vs V2 rules  
+Document detection, enforcement, and filename/case rules
+
+Plan repo reorganization as separate project  
+Document target layout (songs/, formats/, assets/, src/, tests/) later.
+
+Add TODO.md to repo root and keep updated  
+Maintain concise list of outstanding items in the repo.
+
+Add per-performance copyright/notes field guidance  
+Document how to record licensing/copyright info outside repo.
+
+check ipad compatibility
+
+check poem performance type
