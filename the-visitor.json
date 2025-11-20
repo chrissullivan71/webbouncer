@@ -1,0 +1,32 @@
+{
+  "songID": "the-visitor",
+  "version": 2,
+  "title": "The Visitor",
+  "author": "Chris Sullivan",
+  "type": "song",
+  "performance_style": "bouncing-ball",
+  "content_file": "the-visitor.txt",
+  "time_signature": "4/4",
+  "key": "G",
+  "bounce_duration": 0.84375,
+  "beat_pattern": [1, 3, 5, 7],
+  "sections": [
+    "Intro",
+    "Verse 1",
+    "Chorus",
+    "Verse 2",
+    "Chorus",
+    "Verse 3",
+    "Bridge",
+    "Chorus",
+    "Verse 4",
+    "Chorus",
+    "Outtro"
+  ],
+  "assets": {
+    "background": "background.jpg",
+    "controls": "controls.jpg",
+    "icon": "icon.png",
+    "mag_tape": "mag_tape.jpg"
+  }
+}
