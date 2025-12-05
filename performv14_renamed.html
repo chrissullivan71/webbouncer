@@ -1,0 +1,3198 @@
+<!doctype html>
+<!--
+Copyright (c) 2025 Chris Sullivan. All rights reserved.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bouncing Ball Teleprompter (BBT)</title>
+    <style>
+      /* Page basics */
+      body {
+        margin: 0;
+        padding: 0;
+        background: #1e1e1e;
+        color: white;
+        font-family: "Courier New", monospace;
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+
+      /* Canvas */
+      #gameCanvas {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        background: #1e1e1e;
+        cursor: pointer;
+        z-index: 0;
+        pointer-events: auto;
+      }
+
+      /* Song selector: place 122px down and aligned to the right; limit width so it won't span the page */
+      #songSelector {
+        position: absolute;
+        top: 82px; /* 82px below top of viewport (under the mag-tape) */
+        right: 10px; /* align near right edge; change to 0px if you want flush */
+        z-index: 2500;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 2px solid #00ff00;
+        background: rgba(0, 0, 0, 0.7);
+        color: #fff;
+        font-family: "Courier New", monospace;
+        font-size: 14px;
+        box-sizing: border-box;
+
+        /* prevent full-width stretching */
+        width: auto; /* let the selector size to its contents */
+        min-width: 160px; /* minimum usable size */
+        max-width: 420px; /* caps width so it won't span the canvas */
+        display: inline-block; /* avoid block-level width expansion */
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* Right-side help block */
+      #controls {
+        position: absolute;
+        top: 200px;
+        right: 10px;
+        z-index: 100;
+        color: #00ff00;
+        font-size: 12px;
+        text-align: right;
+        max-width: 300px;
+      }
+
+      /* Debug info */
+      #debugInfo {
+        position: absolute;
+        top: 200px;
+        right: 10px;
+        z-index: 100;
+        background: rgba(0, 0, 0, 0.8);
+        border: 2px solid #ffff00;
+        padding: 10px;
+        border-radius: 5px;
+        color: #ffff00;
+        font-size: 11px;
+        max-width: 300px;
+        display: none;
+      }
+
+      /* Control row (single consolidated definition).
+			 Anchored bottom-left; JS may nudge it to the right to avoid tape/emoji. */
+      #controlRow {
+        position: absolute;
+        left: 10px; /* anchor at the bottom-left by default */
+        right: auto; /* clear any right anchor */
+        bottom: 10px;
+        z-index: 2000; /* keep above canvas */
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+        pointer-events: auto;
+        transform-origin: left bottom;
+        flex-wrap: wrap; /* allow the row to wrap if it gets too long */
+        max-width: calc(
+          100% - 360px
+        ); /* leave room on the right for help text */
+        box-sizing: border-box;
+        padding: 6px 4px; /* small padding around the group */
+      }
+
+      /* Buttons & speed control inside the row */
+      #controlRow button,
+      #controlRow #speedControl {
+        position: relative;
+        background: rgba(0, 200, 0, 0.8);
+        color: white;
+        border: 2px solid #00ff00;
+        padding: 8px 12px; /* reduced horizontal padding */
+        font-size: 14px; /* reduced font-size */
+        font-weight: bold;
+        cursor: pointer;
+        border-radius: 5px;
+        font-family: "Courier New", monospace;
+        white-space: nowrap;
+        box-sizing: border-box;
+        min-width: 92px; /* prevents too-small buttons */
+        max-width: 160px; /* caps length */
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 0 0 auto;
+      }
+
+      /* Slightly smaller restart button */
+      #restartButton {
+        padding: 6px 10px;
+        font-size: 13px;
+        background: rgba(200, 0, 0, 0.8);
+        border-color: #ff0000;
+      }
+
+      /* Hover / paused visuals */
+      #listenButton:hover,
+      #playListenButton:hover,
+      #playButton:hover {
+        background: rgba(0, 255, 0, 0.9);
+      }
+      #listenButton.paused,
+      #playListenButton.paused,
+      #playButton.paused {
+        background: rgba(200, 100, 0, 0.8);
+        border-color: #ff8800;
+      }
+
+      /* Speed control box styling */
+      #controlRow #speedControl {
+        background: rgba(0, 0, 0, 0.7);
+        border: 2px solid #00ff00;
+        padding: 6px 8px;
+        border-radius: 5px;
+        color: white;
+        font-size: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        min-width: 140px;
+        max-width: 220px;
+      }
+
+      /* Slider width */
+      #speedSlider {
+        width: 120px;
+        margin: 0;
+      }
+
+      /* Emoji / audio indicator */
+      .emoji-fill {
+        color: transparent !important;
+        text-shadow: 0 0 0 #000;
+      }
+      #musicEmojis {
+        position: absolute !important;
+        z-index: 3000 !important;
+        pointer-events: none;
+        font-size: 32px;
+        transform: scaleX(0.8); /* slightly compress horizontally */
+        transform-origin: left bottom;
+        line-height: 1;
+        display: inline-block;
+      }
+	  /* highlight asterisk tokens treated as words */
+		.wordAsterisk {
+		  display: inline-block;
+		  background: #fffb8f;   /* pale yellow highlight */
+		  color: #000;
+		  padding: 0 0.25em;
+		  margin: 0 0.1em;
+		  border-radius: 2px;
+		  font-weight: 600;
+	  } 
+	  </style>
+  </head>
+  <body>
+    <select id="songSelector">
+      <option value="">Select Song...</option>
+      <option value="Four Strong Winds">Four Strong Winds</option>
+      <option value="rainbow">Rainbow Connection</option>
+      <option value="dylan">Don't Think Twice, It's All Right</option>
+      <option value="The Visitor">The Visitor</option>
+    </select>
+    <div id="loadingStatus">Select a song to begin...</div>
+
+    <div id="controlRow">
+      <button id="listenButton" aria-label="Listen">▶ LISTEN</button>
+      <button id="playListenButton" aria-label="Play & Listen">
+        ▶ PLAY&LISTEN
+      </button>
+      <button id="playButton">▶ PLAY</button>
+      <button id="restartButton">↻ RESET</button>
+
+      <div id="speedControl">
+        <div>Speed Control:</div>
+        <input
+          type="range"
+          id="speedSlider"
+          min="0"
+          max="4"
+          value="0"
+          step="1"
+        />
+        <div id="speedLabel">Speed: 1.0x</div>
+      </div>
+    </div>
+
+    <div id="debugInfo">
+      <div>DEBUG MODE ACTIVE</div>
+      <div id="debugData"></div>
+    </div>
+
+    <div id="controls">
+      <strong>KEYBOARD:</strong><br />
+      Space: Play/Pause<br />
+      R: Restart<br />
+      Q/Esc: Quit<br />
+      D: Toggle Debug<br /><br />
+      <strong>TAPE MACHINE:</strong><br />
+      Double-click PLAY or STOP/EJECT to control music<br />
+      Forward (green): Play/Pause<br />
+      Fast Forward/Rewind: Line skip<br />
+      Pause (yellow): Pause toggle<br />
+      Stop (red): Restart<br />
+      Record: Debug mode<br />
+      Playback Mode (top): Mode cycle<br /><br />
+      <strong>DRAG:</strong><br />
+      Magnetic tape: change positionn
+    </div>
+
+    <audio id="backgroundMusic" src="The_Visitor.mp3"></audio>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <span
+      id="musicEmojis"
+      style="
+        position: absolute;
+        pointer-events: none;
+        z-index: 3000;
+        font-size: 42px;
+        left: calc(20px + ((100vh / 3 + 72px) * 0.544768) + 3mm);
+        bottom: calc(20px + 6px);
+      "
+      >🎶🎸</span
+    >
+
+    <script>
+      // Embedded song data with real content
+      const embeddedSongs = {
+        "Four Strong Winds": `Four Strong Winds by Ian Tyson
+4/4
+
+[Verse 1]
+G            C       D       G
+Four strong winds that blow lonely
+1            4       5       1     ZZZ   LL 01
+[Verse 1]
+G            C       D       G
+Seven seas that run high
+1            4       5       1     ZZZ   LL 02
+[Verse 1]
+C            D        G      Em
+All those things that don't change, come what may
+4            5        1      6m    ZZZ   LL 03
+[Verse 1]
+C            D           G
+But our good times are all gone
+4            5           1         ZZZ   LL 04
+[Verse 1]
+C            D           G
+And I'm bound for moving on
+4            5           1         ZZZ   LL 05
+[Chorus]
+C            D             G     Em
+I'll look for you if I'm ever back this way
+4            5             1     6m    ZZZ   LL 06
+`,
+        rainbow: `The Rainbow Connection  Words and Music by Paul Williams
+3/4
+
+[Verse 1]
+C             Am      Dm          G7        
+Why are there so many songs about rainbows,
+1             4       7           10            ZZZ               LL 01	
+[Verse 1]
+C                 Am    Dm    G7
+And what's on the other side?
+    1             4     7     10                 ZZZ              LL 02	
+[Verse 1]	
+C            Am           Dm     G7           
+Rainbows are visions, but only illusions,
+1            4            7      10                     ZZZ       LL 03	
+[Verse 1]
+    C             Am         Dm    G7
+And rainbows have nothing to hide.       
+    1             4          7     10                 ZZZ         LL 04
+[Verse 1]	
+Fmaj7                                             
+So we've been told and some choose to believe it, 
+1             4             7           10               ZZZ      LL 05
+[Verse 1]          
+Em           
+I know they're wrong; wait and see.
+1              4               7                          ZZZ     LL 06
+[Chorus]
+Dm             G7           Em         A7       
+Some day we'll find it, the rainbow connection, 
+1              4            7          10                 ZZZ     LL 07
+[Chorus]
+    Dm          G7            C
+The lovers, the dreamers, and me.
+    1           4             7                           ZZZ     LL 08
+[Verse 2]
+C             Am              Dm           G7        
+Who said that every wish will be heard and answered,
+1             4               7            10             ZZZ   LL 09
+[Verse 2]
+     C             Am      Dm     G7
+When wished on the morning star?
+     1             4       7      10                         ZZZ  LL 10
+[Verse 2]
+C        Am                  Dm        G7         
+Somebody thought of that and someone believed it, 
+1        4                   7         10                   ZZZ   LL 11
+[Verse 2]
+    C              Am      Dm     G7
+And look what it's done so far.
+    1              4       7      10                        ZZZ   LL 12
+[Verse 2]
+Fmaj7                                       
+What's so amazing that keeps us stargazing, 
+1          4           7            10                      ZZZ   LL 13
+[Verse 2]
+    Em 
+and what do we think we might see?
+    1          4              7                             ZZZ     LL 14
+[Chorus]
+Dm             G7           Em        A7        
+Some day we'll find it, the rainbow connection, 
+1              4            7          10                  ZZZ    LL 15
+[Chorus]
+    Dm          G7           C
+The lovers, the dreamers and me.
+    1           4            7                             ZZZ    LL 16
+[Bridge]
+Em        Dm        C         Fmaj7          
+All of us under its spell, we know that it's 
+1         4         7         10                           ZZZ    LL 17
+[Bridge]
+C        Dm   G7
+probably ma - gic.
+1        4    7                                            ZZZ    LL 18
+[Verse 3]
+C             Am              Dm             G7      
+Have you been half asleep and have you heard voices, 
+1             4               7              10              ZZZ  LL 19
+[Verse 3]
+C               Am         Dm
+I've heard them calling my name.
+1               4          7       10                        ZZZ  LL 20
+[Verse 3]
+C           Am               Dm              G7       
+Is this the sweet sound that calls the young sailors? 
+1           4                7               10              ZZZ   LL 21
+[Verse 3]
+    C              Am          Dm     G7
+The voice might be one and the same.
+    1              4           7      10                      ZZZ LL 22
+[Verse 3]	
+Fmaj7                                    
+I've heard it too many times to ignore it
+1             4        7          10                   ZZZ        LL 23
+[Verse 3]
+     Em
+It's something that I'm supposed to be.
+     1              4               7                  ZZZ        LL 24	 
+[Chorus]
+Dm            G7          Em         A7       
+Someday we'll find it the rainbow connection,
+1             4           7          10                  ZZZ      LL 25       
+[Verse 3]
+    Dm          G7           C
+The lovers, the dreamers and me.
+    1           4            7                           ZZZ      LL 26
+[Bridge, end]
+Em        Dm         C      Dm       
+Da dee da dee dum de da, da da dee da
+1         4          7      10                           ZZZ      LL 27
+[Bridge, end]
+G7      C
+dum dee dee
+1       4                                                ZZZ      LL 28`,
+
+        dylan: `Don't Think Twice, It's All Right   by Bob Dylan
+4/4
+[Verse 1]
+   C               G              Am         G              LL 01
+It ain't no use to sit and wonder why, baby                 LL 01
+   1               3              5          7  ZZZ         LL 01
+[Verse 1]
+F                      C     G7                             LL 02 
+If'n you don't know by now                                  LL 02
+1                      5     7      ZZZ                     LL 02
+[Verse 1]
+       C               G              Am         G          LL 03
+An' it ain't no use to sit and wonder why, baby             LL 03
+       1               3              5          7  ZZZ     LL 03
+[Verse 1]
+D7              G          G7                               LL 04
+It'll never do, somehow                                     LL 04
+1               5          7     ZZZ                        LL 04
+[Verse 1]
+          C                    C7                           LL 05
+When your rooster crows at the break of dawn                LL 05
+          1                    5       ZZZ                  LL 05
+[Verse 1]
+F                        D7                                 LL 06
+Look out your window and I'll be gone                       LL 06
+1                        5    ZZZ                           LL 06
+[Verse 1]
+C          G            Am        F                         LL 07
+You're the reason I'm a trav'lin' on                        LL 07
+1          3            5         7    ZZZ                  LL 07
+[Chorus]
+C           G7              C      G7                       LL 08
+Don't think twice, it's all right                           LL 08
+1           3               5      7    ZZZ                 LL 08
+[Verse 1]
+C     G     Am    F    C                                    LL 09
+(Harmonica break)                                           LL 09
+1     3     5     7    8      ZZZ                           LL 09
+[Verse 2]
+   C               G               Am           G           LL 10
+It ain't no use in turnin' on your light, babe              LL 10
+   1               3               5            7   ZZZ     LL 10
+[Verse 2]
+F                 C       G7                                LL 11
+The light I never knowed                                    LL 11
+1                 5       7        ZZZ                      LL 11
+[Verse 2]
+       C               G               Am           G       LL 12
+An' it ain't no use in turnin' on your light, babe          LL 12
+       1               3               5            7  ZZZ  LL 12
+[Verse 2]
+D7                          G      G7                       LL 13
+I'm on the dark side of the road                            LL 13
+1                           5      7     ZZZ                LL 13
+[Verse 2]
+  C                                  C7                     LL 14
+I wish there was somethin' you would do or say              LL 14
+  1                                  5    ZZZ               LL 14
+[Verse 2]
+   F                         D7                             LL 15
+To try and make me change my mind and stay                  LL 15
+   1                         5    ZZZ                       LL 15
+[Verse 2]
+C        G            Am      F                             LL 16
+We never did too much talkin' anyway                        LL 16
+1        3            5       7      ZZZ                    LL 16	
+[Chorus]
+C              G7              C      G7                    LL 17
+So don't think twice, it's all right                        LL 17
+   1           3               5      7  ZZZ                LL 17
+[Verse 2]
+C     G     Am    F     C                                   LL 18
+(Harmonica break)                                           LL 18
+1     3     5     7     8   ZZZ                             LL 18
+[Verse 3]
+      C               G              Am        G            LL 19
+No it ain't no use in callin' out my name, gal              LL 19
+      1               3              5         7     ZZZ    LL 19
+[Verse 3]
+F                   C       G7                              LL 20
+Like you never done before                                  LL 20
+1                   5       7    ZZZ                        LL 20
+[Verse 3]
+   C               G              Am         G              LL 21
+It ain't no use in callin' out my name, gal                 LL 21
+   1               3              5          7   ZZZ        LL 21
+[Verse 3]
+D7               G        G7                                LL 22
+I can't hear you anymore                                    LL 22
+1                5        7          ZZZ                    LL 22
+[Verse 3]
+      C                        C7                           LL 23
+I'm a-thinkin' and a-wond'rin' walkin' down the road        LL 23
+      1                        5      ZZZ                   LL 23
+[Verse 3]
+F                       D7                                  LL 24
+I once loved a woman, a child I'm told                      LL 24
+1                       5       ZZZ                         LL 24
+[Verse 3]
+  C           G             Am        G                     LL 25
+I give her my heart but she wanted my soul                  LL 25
+1             3             5         7     ZZZ             LL 25
+[Chorus]
+C           G               C        G7                     LL 26
+Don't think twice, it's all right                           LL 26
+1           3               5        7     ZZZ              LL 26
+[Verse 3]
+C     G     Am    F     C                                   LL 27
+(Harmonica break)                                           LL 27
+1     3     5     7         ZZZ                             LL 27
+[Verse 4]
+C     G          Am                                         LL 28
+So lo-ong, honey babe                                       LL 28
+1     3          5     ZZZ                                  LL 28
+[Verse 4]
+          F              C       G7                         LL 29
+Where I'm bound, I can't tell                               LL 29
+          1              5       7         ZZZ              LL 29
+[Verse 4]
+C          G           Am        G                          LL 30
+Goodbye is too good a word, gal                             LL 30
+1          3           5         7     ZZZ                  LL 30
+[Verse 4]
+D7                         G         G7                     LL 31
+So I'll just say fare thee well                             LL 31
+1                          5         7       ZZZ            LL 31
+[Verse 4]
+C                          C7                               LL 32
+I ain't sayin' you treated me unkind                        LL 32
+1                          5     ZZZ                        LL 32
+[Verse 4]
+F                              D7                           LL 33
+You could have done better but I don't mind                 LL 33
+1                              5           ZZZ              LL 33
+[Verse 4]
+C              G         Am       G                         LL 34
+You just kinda wasted my precious time                      LL 34
+1              3         5        7      ZZZ                LL 34
+[Chorus]
+C               G7          C                               LL 35
+But don't think twice, it's alright                         LL 35
+1               3           5         ZZZ                   LL 35
+[Verse 5]
+   C               G              Am         G              LL 36
+(Harmonica break)                                           LL 36
+   1               3              5          7   ZZZ        LL 36
+[Verse 5]
+F                      C     G7                             LL 37 
+(Harmonica break)                                           LL 37
+1                      5     7      ZZZ                     LL 37
+[Verse 5]
+       C               G              Am         G          LL 38
+(Harmonica break)                                           LL 38
+       1               3              5          7  ZZZ     LL 38
+[Verse 5]
+D7              G          G7                               LL 39
+(Harmonica break)                                           LL 39
+1               5          7     ZZZ                        LL 39
+[Verse 5]
+          C                    C7                           LL 40
+(Harmonica break)                                           LL 40
+          1                    5       ZZZ                  LL 40
+[Verse 5]
+F                        D7                                 LL 41
+(Harmonica break)                                           LL 41
+1                        5    ZZZ                           LL 41
+[Verse 5]
+C          G            Am        F                         LL 42
+(Harmonica break)                                           LL 42
+1          3            5         7    ZZZ                  LL 42
+[Chorus]
+C           G7              C      C                        LL 43
+(Harmonica break)                                           LL 43
+1           3               5      7    ZZZ                 LL 43
+`,
+        "The Visitor": `The Visitor by Chris Sullivan
+4/4
+
+[Intro]{8}
+[Cricket Music 1]{12}
+[Verse 1]
+        G          D7       G       G7
+Well he might’ve arrived by courier 
+        1          3        5       7           ZZZ         LL 01
+[Verse 1]
+       C              D7          G       G7
+It’s unlikely that he came up the stairs
+       1              3           5       7     ZZZ         LL 02
+[Verse 1]
+   C                D7 Em 
+He prob’ly took the elevator 
+   1                3  5                        ZZZ         LL 03
+[Verse 1]
+       Am                D7
+No one knows, and nobody cares
+       1          3      5                      ZZZ         LL 04
+[Chorus 1]
+          G              D7        G       G7 
+There’s a cricket on the twentieth floor 
+          1              3         5       7    ZZZ         LL 05
+[Chorus 1]
+        C        D7     G            G7
+You can hear him in the men’s room
+        1        3      5            7          ZZZ         LL 06
+[Chorus 1] 
+     C         D7       Bm    Em 
+It’s not about peace or war 
+     1         3        5     7                 ZZZ         LL 08
+[Chorus 1]
+          Am             D7        G
+There’s a cricket on the twentieth floor
+          1              3         5            ZZZ         LL 09
+[Cricket Music 2]{12}
+[Verse 2]
+   G           D7      G       G7
+He started his legs to singin 
+   1           3       5       7                ZZZ         LL 10
+[Verse 2]
+       C                D7      G         G7
+Didn’t know that it was far too late now
+       1                3      5         7     ZZZ         LL 11
+[Verse 2]
+         C       D7     Em 
+When the heating season came 
+         1       3      5                       ZZZ         LL 12
+[Verse 2]
+   Am                     D7
+He figured it was time to mate now
+   1              3       5                     ZZZ         LL 13
+[Chorus 2]
+          G              D7        G       G7 
+There’s a cricket on the twentieth floor 
+          1              3         5       7    ZZZ         LL 14
+[Chorus 2]
+        C        D7     G            G7
+You can hear him in the men’s room
+        1        3      5            7          ZZZ         LL 15
+[Chorus 2]
+     C         D7       Bm    Em 
+It’s not about peace or war 
+     1         3        5     7                 ZZZ         LL 16
+[Chorus 2]
+          Am             D7        G 
+There’s a cricket on the twentieth floor
+          1              3         5            ZZZ         LL 17
+[Cricket Music 3]{12}
+[Verse 3]
+   G                   D7      G        G7
+He thinks she’s playin hard to get 
+   1                   3       5        7       ZZZ         LL 18
+[Verse 3]
+        C               D7        G       G7
+And the next chirp will bring her hoppin’
+   1               3              5       7     ZZZ         LL 19
+[Verse 3]
+          C          D7       Em
+But she’s twenty one floors below 
+          1          3        5                 ZZZ         LL 20
+[Verse 3]
+          Am              D7
+Where the people do their shoppin’
+          1      3        5                     ZZZ         LL 21
+[Bridge 1]
+       Bm               Em
+Out of place and out of time 
+       1         3      5                       ZZZ         LL 22
+[Bridge 1]
+       Bm                   Em
+Out of sight and out of his mind
+       1         3          5                   ZZZ         LL 23
+[Bridge 1]
+       C        D7          Bm       Em
+It’s a bit of a shame and a bit of a sin 
+       1        3           5        7          ZZZ         LL 24
+[Bridge 1]
+        Am                     D7
+Neither one of us knows what a scrape we’re in
+        1         3            5            7   ZZZ         LL 25
+[Instrumental Chorus]
+          G              D7        G       G7 
+There’s a cricket on the twentieth floor 
+          1              3         5       7    ZZZ         LL 26
+[Instrumental Chorus]
+        C        D7     G            G7
+You can hear him in the men’s room
+        1        3      5            7          ZZZ         LL 27
+[Instrumental Chorus]
+     C         D7       Bm    Em 
+It’s not about peace or war 
+     1         3        5     7                 ZZZ         LL 28
+[Instrumental Chorus]
+          Am             D7        G
+There’s a cricket on the twentieth floor
+          1              3         5            ZZZ         LL 29
+[Verse 4]
+        G               D7          G       G7
+Haven’t heard him for a week now or more 
+        1               3           5       7   ZZZ         LL 30
+[Verse 4]
+      C         D7     G       G7
+Kinda wish that he had stayed
+      1         3      5       7                ZZZ         LL 31
+[Verse 4]
+          C            D7     Em
+Must have given up and gone before 
+          1            3      5                 ZZZ         LL 32
+[Verse 4]
+      Am                     D7
+Kinda miss that song that he played
+      1         3            5                  ZZZ         LL 33
+[Bridge 2]
+       Bm               Em
+Out of place and out of time 
+       1         3      5                       ZZZ         LL 22
+[Bridge 2]
+       Bm                   Em
+Out of sight and out of his mind
+       1         3          5                   ZZZ         LL 23
+[Bridge 2]
+       C        D7          Bm       Em
+It’s a bit of a shame and a bit of a sin 
+       1        3           5        7          ZZZ         LL 24
+[Bridge 2]
+        Am                     D7
+Neither one of us knows what a scrape we’re in
+        1         3            5            7   ZZZ         LL 25
+[Chorus 4]
+          G              D7        G       G7 
+There’s a cricket on the twentieth floor 
+          1              3         5       7    ZZZ         LL 36
+[Chorus 4]
+        C        D7     G            G7
+You can hear him in the men’s room
+        1        3      5            7          ZZZ         LL 37
+[Chorus 4]
+     C         D7       Bm    Em 
+It’s not about peace or war 
+     1         3        5     7                 ZZZ         LL 38
+[Chorus 4]
+          Am             D7        G
+There’s a cricket on the twentieth floor
+          1              3         5            ZZZ         LL 39
+[Outtro]
+[long cricket music]
+`,
+      };
+      const assetStatus = {
+        tape_deck: "grey",
+        mag_tape: "grey",
+        background: "grey",
+        song: "grey",
+      };
+
+      const assetLabels = {
+        tape_deck: "tape deck",
+        mag_tape: "mag tape",
+        background: "background",
+        song: "song",
+      };
+
+      const songFileMap = {
+        "Four Strong Winds": null, // no file, only embed
+        rainbow: "williams-ascher-rainbow-connection.txt",
+        dylan: "dont_think_twice.txt",
+        "The Visitor": "the-visitor.txt",
+      };
+
+      const ASSET_BASE_URL = "./";
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const playButton = document.getElementById("playButton");
+      const restartButton = document.getElementById("restartButton");
+      const songSelector = document.getElementById("songSelector");
+      const speedSlider = document.getElementById("speedSlider");
+      const speedLabel = document.getElementById("speedLabel");
+      const debugInfo = document.getElementById("debugInfo");
+      const debugData = document.getElementById("debugData");
+      // Adjust the allowance (48px) or the base (2020) (that is the eidth of the tape deck, the
+      // 48 is nominally to allow for the emojis
+      const CONTROLS_PLUS_EMOJI_WIDTH = 2020 + 48;
+
+      // Place the emoji once, then position the control row using the literal constant:
+      window.addEventListener("load", () => {
+        AP_drawMusicEmojis();
+        AP_positionControlRowByConstant();
+      });
+
+      const audioElement = document.getElementById("backgroundMusic");
+      if (!audioElement) {
+        console.error("#backgroundMusic element not found");
+      } else {
+        audioElement.crossOrigin = "anonymous"; // if you load from your Pages
+        audioElement.src = ASSET_BASE_URL + "The_Visitor.mp3";
+        try {
+          audioElement.load();
+        } catch (e) {
+          console.warn(e);
+        }
+
+        // optional helpful error handler
+        audioElement.addEventListener("error", () => {
+          console.error(
+            "Audio load error",
+            audioElement.error,
+            audioElement.src,
+          );
+          document.getElementById("loadingStatus").textContent =
+            "Audio load error — see console";
+        });
+      }
+
+      // let musicIsPlaying = false;
+      function AP_isAudioActuallyPlaying() {
+        return (
+          !audioElement.paused &&
+          !audioElement.ended &&
+          audioElement.currentTime > 0
+        );
+      }
+
+      // Read authoritative audio element properties
+      function AP_syncAudioUI() {
+        if (!audioElement)
+          return { playingNow: false, timeNow: 0, ended: false };
+        const playingNow =
+          !audioElement.paused &&
+          !audioElement.ended &&
+          audioElement.currentTime > 0;
+        const timeNow = Number.isFinite(audioElement.currentTime)
+          ? audioElement.currentTime
+          : 0;
+        const ended = !!audioElement.ended;
+        // NOTE: for testing you can uncomment the log below, then remove it when step verified
+        // console.log('syncAudioUI', { playingNow, timeNow, ended });
+        return { playingNow, timeNow, ended };
+      }
+
+      // Track play, pause, and ended events
+      audioElement.addEventListener("play", () => {
+        //			musicIsPlaying = true;
+        //			ctx.fillStyle = isAudioActuallyPlaying() ? "#00cc44" : "#555";
+        document.getElementById("musicEmojis").classList.remove("emoji-fill");
+        AP_drawMusicEmojis();
+      });
+
+      audioElement.addEventListener("pause", () => {
+        //			musicIsPlaying = false;
+        //			ctx.fillStyle = isAudioActuallyPlaying() ? "#00cc44" : "#555";
+        document.getElementById("musicEmojis").classList.add("emoji-fill");
+        AP_drawMusicEmojis();
+      });
+
+      function AP_resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        AP_drawMusicEmojis();
+      }
+      AP_resizeCanvas();
+      window.addEventListener("resize", AP_resizeCanvas);
+
+      let backgroundImage = null;
+      let controlsImage = null;
+      let magTapeImage = null;
+
+      // Tape machine button coordinates (from Python version)
+      const ORIGINAL_CONTROLS_SIZE = { width: 2040, height: 3708 };
+      const BUTTON_COORDS_ORIGINAL = {
+        playback_mode: [
+          [200, 30],
+          [1800, 30],
+          [1800, 180],
+          [200, 180],
+        ],
+        forward: [
+          [63, 1953],
+          [1866, 1851],
+          [1888, 2048],
+          [79, 2166],
+        ],
+        fast_rewind: [
+          [162, 1242],
+          [1011, 1207],
+          [1038, 1411],
+          [189, 1455],
+        ],
+        fast_forward: [
+          [1216, 1216],
+          [1987, 1194],
+          [2010, 1393],
+          [1251, 1413],
+        ],
+        pause: [
+          [1170, 2632],
+          [1944, 2563],
+          [1966, 2766],
+          [1197, 2844],
+        ],
+        stop_eject: [
+          [154, 3454],
+          [1934, 3229],
+          [1956, 3434],
+          [176, 3666],
+        ],
+        record: [
+          [136, 2702],
+          [976, 2619],
+          [1002, 2844],
+          [124, 2929],
+        ],
+      };
+
+      let scaledButtonCoords = {};
+      let playbackMode = "normal"; // normal, playback_idle, playback_active
+      let debugMode = false;
+
+      function PA_setColoredBallStatus(asset, status) {
+        const colored_ball = document.getElementById("colored_ball-" + asset);
+        if (!colored_ball) return;
+        colored_ball.className = "colored_ball " + status;
+      }
+
+      // Initialize all colored balls to grey at page load
+      ["tape_deck", "mag_tape", "background", "song"].forEach((asset) =>
+        PA_setColoredBallStatus(asset, "grey"),
+      );
+
+      function AP_scaleButtonCoordinates(
+        originalCoords,
+        originalImageSize,
+        scaledImageSize,
+      ) {
+        const scaleX = scaledImageSize.width / originalImageSize.width;
+        const scaleY = scaledImageSize.height / originalImageSize.height;
+
+        return originalCoords.map((coord) => [
+          Math.floor(coord[0] * scaleX),
+          Math.floor(coord[1] * scaleY),
+        ]);
+      }
+
+      function AP_offsetCoordinates(coords, offsetX, offsetY) {
+        return coords.map((coord) => [coord[0] + offsetX, coord[1] + offsetY]);
+      }
+
+      function AP_scaleButtonCoords() {
+        if (!controlsImage || !controlsImage.complete) return;
+
+        scaledButtonCoords = {};
+        const controlsHeight = canvas.height / 3 + 72;
+        const controlsWidth =
+          (controlsImage.width * controlsHeight) / controlsImage.height;
+        const controlsX = 20;
+        const controlsY = canvas.height - controlsHeight - 20;
+
+        const scaledImageSize = {
+          width: controlsWidth,
+          height: controlsHeight,
+        };
+
+        for (const [buttonName, coords] of Object.entries(
+          BUTTON_COORDS_ORIGINAL,
+        )) {
+          const scaledCoords = AP_scaleButtonCoordinates(
+            coords,
+            ORIGINAL_CONTROLS_SIZE,
+            scaledImageSize,
+          );
+          const finalCoords = AP_offsetCoordinates(
+            scaledCoords,
+            controlsX,
+            controlsY,
+          );
+          scaledButtonCoords[buttonName] = finalCoords;
+        }
+      }
+
+      function AP_pointInPolygon(point, polygon) {
+        const [x, y] = point;
+        let inside = false;
+
+        let j = polygon.length - 1;
+        for (let i = 0; i < polygon.length; i++) {
+          const [xi, yi] = polygon[i];
+          const [xj, yj] = polygon[j];
+
+          if (
+            yi > y !== yj > y &&
+            x < ((xj - xi) * (y - yi)) / (yj - yi) + xi
+          ) {
+            inside = !inside;
+          }
+          j = i;
+        }
+
+        return inside;
+      }
+
+      function AP_checkButtonClick(pos, buttonCoords) {
+        for (const [buttonName, coords] of Object.entries(buttonCoords)) {
+          if (AP_pointInPolygon(pos, coords)) {
+            return buttonName;
+          }
+        }
+        return null;
+      }
+
+      function AP_handleControlsClick(mousePos) {
+        const clickedButton = AP_checkButtonClick(
+          [mousePos.x, mousePos.y],
+          scaledButtonCoords,
+        );
+
+        if (clickedButton) {
+          const currentTime = performance.now() / 1000;
+          console.log(`Controls button clicked: ${clickedButton}`);
+
+          if (clickedButton === "playback_mode") {
+            // Cycle through playback modes
+            if (playbackMode === "normal") {
+              playbackMode = "playback_idle";
+              console.log("Switched to playback mode (idle)");
+            } else if (playbackMode === "playback_idle") {
+              playbackMode = "playback_active";
+              console.log("Started playback mode (active)");
+            } else {
+              playbackMode = "normal";
+              console.log("Returned to normal mode");
+            }
+          } else if (clickedButton === "forward") {
+            // Main play/pause button
+            AP_togglePlayback();
+          } else if (clickedButton === "fast_forward") {
+            // Jump to next line
+            if (currentIndex < lyrics.length - 1) {
+              currentIndex++;
+              bounceCount = 0;
+              bounceStartTime = currentTime;
+              ballY = BALL_HIGH_POSITION;
+              songLineNumber++;
+              console.log(`Fast forward to line ${currentIndex + 1}`);
+            } else {
+              console.log(`Already at last line ${lyrics.length}`);
+            }
+          } else if (clickedButton === "fast_rewind") {
+            // Jump to previous line
+            if (currentIndex > 0) {
+              currentIndex--;
+              bounceCount = 0;
+              bounceStartTime = currentTime;
+              ballY = BALL_HIGH_POSITION;
+              songLineNumber--;
+              console.log(`Rewind to line ${currentIndex + 1}`);
+            } else {
+              console.log("Already at first line");
+            }
+          } else if (clickedButton === "pause") {
+            // Pause/unpause toggle
+            if (!waitingForStart) {
+              if (songPaused) {
+                const pauseDuration = currentTime - pauseTime;
+                bounceStartTime += pauseDuration;
+                songPaused = false;
+                console.log("Unpaused from controls");
+              } else {
+                songPaused = true;
+                pauseTime = currentTime;
+                console.log("Paused from controls");
+              }
+              AP_updatePlayButton();
+            }
+          } else if (clickedButton === "stop_eject") {
+            // Restart song
+            AP_resetSong();
+            waitingForStart = true;
+            AP_updatePlayButton();
+            console.log("Restarted from controls");
+          } else if (clickedButton === "record") {
+            // Toggle debug mode
+            debugMode = !debugMode;
+            debugInfo.style.display = debugMode ? "block" : "none";
+            console.log(`Debug mode: ${debugMode}`);
+          }
+
+          return true;
+        }
+
+        return false;
+      }
+
+      function AP_drawButtonOutlines() {
+        if (!scaledButtonCoords || Object.keys(scaledButtonCoords).length === 0)
+          return;
+
+        for (const [buttonName, coords] of Object.entries(scaledButtonCoords)) {
+          if (coords.length < 3) continue;
+
+          let color;
+          if (buttonName === "playback_mode") {
+            if (playbackMode === "normal") {
+              color = [0, 180, 0];
+            } else if (playbackMode === "playback_idle") {
+              color = [200, 200, 0];
+            } else {
+              color = [200, 0, 0];
+            }
+          } else if (buttonName === "forward") {
+            color = [0, 255, 0];
+          } else if (buttonName === "pause") {
+            color = [255, 255, 0];
+          } else if (buttonName === "stop_eject") {
+            color = [255, 0, 0];
+          } else if (
+            buttonName === "fast_rewind" ||
+            buttonName === "fast_forward"
+          ) {
+            color = [0, 150, 255];
+          } else if (buttonName === "record") {
+            color = debugMode ? [255, 50, 50] : [0, 255, 0];
+          } else {
+            color = [255, 255, 255];
+          }
+
+          ctx.strokeStyle = AP_colorToString(color);
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(coords[0][0], coords[0][1]);
+          for (let i = 1; i < coords.length; i++) {
+            ctx.lineTo(coords[i][0], coords[i][1]);
+          }
+          ctx.closePath();
+          ctx.stroke();
+        }
+      }
+
+      // Position controlRow relative to the emoji using the fixed constant:
+      // gapPx: separation between emoji and control row; marginPx: viewport margin.
+      function AP_positionControlRowByConstant(
+        controlRowWidthPx = CONTROLS_PLUS_EMOJI_WIDTH,
+        gapPx = 8,
+        marginPx = 6,
+      ) {
+        var emoji = document.getElementById("musicEmojis");
+        var row = document.getElementById("controlRow");
+        if (!emoji || !row) return;
+
+        // Measure emoji only (we do not rely on the row measured width)
+        var eRect = emoji.getBoundingClientRect();
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+        if (!controlRowWidthPx || controlRowWidthPx > vw)
+          controlRowWidthPx = row.getBoundingClientRect().width;
+
+        // Preferred left if placing to the right of emoji
+        var placeRightLeft = Math.round(eRect.right + gapPx);
+
+        // Preferred left if placing to the left of emoji
+        var placeLeftLeft = Math.round(eRect.left - gapPx - controlRowWidthPx);
+
+        // Allowed clamped left range
+        var minLeft = marginPx;
+        var maxLeft = Math.max(minLeft, vw - controlRowWidthPx - marginPx);
+
+        var chosenLeft;
+        if (placeRightLeft <= maxLeft) {
+          // room on the right
+          chosenLeft = placeRightLeft;
+        } else if (placeLeftLeft >= minLeft) {
+          // not enough room on right; room on left
+          chosenLeft = placeLeftLeft;
+        } else {
+          // neither ideal; clamp to viewport with margin
+          chosenLeft = Math.min(Math.max(placeRightLeft, minLeft), maxLeft);
+        }
+
+        // Apply left and bottom; clear right so left takes effect
+        row.style.right = "";
+        row.style.left = Math.max(minLeft, Math.round(chosenLeft)) + "px";
+
+        // Vertically align bottom to the emoji bottom (stable)
+        var emojiBottom = Math.round(eRect.bottom);
+        var bottomPx = Math.round(vh - emojiBottom);
+        row.style.bottom = Math.max(marginPx, bottomPx) + "px";
+      }
+
+      /*
+		  Complete replacement drawMusicEmojis().
+
+		  - Reuses the same canvas controls math already in the file.
+		  - Does NOT measure or cache the emoji height.
+		  - Sets style.bottom (not top) so vertical position is stable.
+		  - Uses existing GAP_MM/PX_PER_MM or VERT_NUDGE_PX if present; otherwise uses small pixel fallbacks.
+		  - Positions the emoji a short gap to the right of the drawn controls.
+		*/
+      function AP_drawMusicEmojis() {
+        var emojiSpan = document.getElementById("musicEmojis");
+        if (!emojiSpan || !canvas) return;
+
+        // Position only once (static placement). Subsequent calls skip the expensive layout math.
+        if (!window.__emojiPlaced) {
+          emojiSpan.style.position = "absolute";
+          emojiSpan.style.pointerEvents = "none";
+
+          // Same control geometry math used by the renderer
+          var controlsHeight = Math.round(canvas.height / 3 + 72);
+          var CONTROLS_ASPECT = 2020 / 3708;
+          var controlsWidth = Math.round(controlsHeight * CONTROLS_ASPECT);
+          var controlsX = 20;
+          var controlsY = Math.round(canvas.height - controlsHeight - 20);
+
+          var canvasRect = canvas.getBoundingClientRect();
+          var controlsLeftPage = Math.round(
+            canvasRect.left + window.scrollX + controlsX,
+          );
+          var controlsBottomPage = Math.round(
+            canvasRect.top + window.scrollY + controlsY + controlsHeight,
+          );
+
+          var gapPx =
+            typeof GAP_MM !== "undefined" && typeof PX_PER_MM !== "undefined"
+              ? Math.round(GAP_MM * PX_PER_MM)
+              : 6;
+
+          var vertNudge =
+            typeof VERT_NUDGE_PX !== "undefined" ? VERT_NUDGE_PX : 6;
+
+          var left = controlsLeftPage + controlsWidth + gapPx;
+          var bottomPx = Math.round(
+            window.innerHeight - controlsBottomPage + vertNudge,
+          );
+
+          emojiSpan.style.left = Math.max(2, left) + "px";
+          emojiSpan.style.bottom = bottomPx + "px";
+          emojiSpan.style.top = "";
+          emojiSpan.style.right = "";
+
+          window.__emojiPlaced = true;
+        }
+
+        // Update fill (colour) every call
+        // Uses existing helper isAudioActuallyPlaying() which reads the audio element state.
+        if (
+          typeof AP_isAudioActuallyPlaying === "function" &&
+          AP_isAudioActuallyPlaying()
+        ) {
+          emojiSpan.classList.remove("emoji-fill");
+        } else {
+          emojiSpan.classList.add("emoji-fill");
+        }
+      }
+      //		function drawMusicEmojis() {
+      // Get the playButton's position and size
+      //			const playButton = document.getElementById('playButton');
+      //			const emojiSpan = document.getElementById('musicEmojis');
+
+      //			if (!playButton || !emojiSpan) return;
+
+      // Get bounding rectangle relative to the viewport
+      //			const rect = playButton.getBoundingClientRect();
+      //			const canvasRect = canvas.getBoundingClientRect();
+
+      // Calculate emoji position:
+      // - 24px to the left of the play button's left edge
+      // - Vertically centered relative to the play button
+      // - leaving enough room for all the emojis
+      //			const emojiX = rect.left - canvasRect.left - (24+150);
+      //			const emojiY = rect.top - canvasRect.top + (rect.height / 2) - 21;
+
+      //			emojiSpan.style.left = `${emojiX}px`;
+      //			emojiSpan.style.top = `${emojiY}px`;
+      //		}
+
+      AP_drawMusicEmojis();
+      AP_positionControlRowByConstant(); // uses CONTROLS_PLUS_EMOJI_WIDTH internally
+
+      const POSITION_TITLE = 120;
+      const POSITION_TIME_SIGNATURE = 150;
+      const POSITION_SECTION = 180;
+      const POSITION_CHORDS = 210;
+      const POSITION_LYRIC_LINE = 240;
+      const BALL_HIGH_POSITION = 230;
+
+      // Speed control
+      const speedValues = [1.0, 1.25, 1.5, 1.75, 2.0];
+      const speedLabels = ["1.0x", "1.25x", "1.5x", "1.75x", "2.0x"];
+      let currentSpeedIndex = 0;
+      const BASE_BOUNCE_DURATION = 0.84375;
+
+      speedSlider.addEventListener("input", function () {
+        currentSpeedIndex = parseInt(speedSlider.value);
+        const speedMultiplier = speedValues[currentSpeedIndex];
+        BOUNCE_DURATION = BASE_BOUNCE_DURATION / speedMultiplier;
+        speedLabel.textContent = `Speed: ${speedLabels[currentSpeedIndex]}`;
+
+        // Recalculate gravity for new bounce duration
+        AP_initBallPhysics();
+
+        console.log(
+		    // this is really where the animation is beginning, starting with the 0th section[0], chord[0], lyric[0], and beat[0]
+          `Speed: ${speedLabels[currentSpeedIndex]} (Duration: ${BOUNCE_DURATION.toFixed(3)}s)`,
+        );
+      });
+
+      // Song-specific timing constants - will be set when song is loaded
+      let BOUNCE_DURATION = BASE_BOUNCE_DURATION;
+      let BOUNCES_PER_LINE = 8;
+
+      let songData = {};
+      let sections = [],
+        chords = [],
+        lyrics = [],
+        beats = [];
+      let beatChordWordData = {};
+      let BEAT_NUMBERS = [];
+      let lastAudioPlaying = false;
+      let currentIndex = 0;
+      let bounceCount = 0;
+      let waitingForStart = true;
+      let songPaused = false;
+      let running = true;
+      let songLineNumber = 1;
+      let isDragging = false;
+      let currentSongKey = "";
+
+      let ballY = BALL_HIGH_POSITION;
+      let ballCenterX = 0;
+      const ballRadius = 25;
+      const ballTop = BALL_HIGH_POSITION;
+      let ballBottom = 0;
+      let bounceStartTime = null;
+      let gravity = 0;
+      let rising = false;
+      let falling = true;
+
+      function AP_initBallPhysics() {
+        ballCenterX = canvas.width / 2;
+        ballBottom = canvas.height - 100;
+        const fallTime = BOUNCE_DURATION / 2;
+        const bounceHeight = ballBottom - ballTop;
+        gravity = (2 * bounceHeight) / fallTime ** 2;
+      }
+
+      function PA_cleanText(text) {
+        return text.trim();
+      }
+
+      function BOTH_getRidOfLL(cleanedLine) {
+        cleanedLine = cleanedLine.replace(/\t/g, "    ");
+
+        if (cleanedLine.includes("LL")) {
+          const llIndex = cleanedLine.indexOf("LL");
+          cleanedLine = cleanedLine.substring(0, llIndex).trimEnd();
+
+          if (cleanedLine.includes("ZZZ")) {
+            const zzzIndex = cleanedLine.indexOf("ZZZ");
+            cleanedLine = cleanedLine.substring(0, zzzIndex).trimEnd();
+          }
+        }
+        return cleanedLine;
+      }
+
+      function BOTH_findBeatPositions(beatLine) {
+        const beats = [];
+        const regex = /\d+/g;
+        let match;
+        while ((match = regex.exec(beatLine)) !== null) {
+          const beatNum = parseInt(match[0]);
+          if (beatNum >= 1 && beatNum <= 15) {
+            beats.push([beatNum, match.index]);
+          }
+        }
+        return beats;
+      }
+
+      function PA_extractItemAtPosition(line, charIndex) {
+        if (charIndex >= line.length) return "";
+
+        let start = charIndex;
+        while (start > 0 && line[start - 1] !== " ") {
+          start--;
+        }
+
+        let end = charIndex;
+        while (end < line.length && line[end] !== " ") {
+          end++;
+        }
+
+        return line.substring(start, end).trim();
+      }
+
+      // ---------------------------
+      // SYLLABLE DICTIONARY
+      // ---------------------------
+
+      const SYLLABLE_DICT = {
+        // ---------------------------
+        // Don't Think Twice, It's All Right
+        // ---------------------------
+        baby: ["baby"],
+        before: ["be", "fore"],
+        better: ["bet", "ter"],
+        could: ["could"],
+        done: ["done"],
+        farewell: ["fare", "well"],
+        goodbye: ["good", "bye"],
+        honey: ["hon", "ey"],
+        kind: ["kind"],
+        mind: ["mind"],
+        never: ["nev", "er"],
+        precious: ["pre", "cious"],
+        reason: ["rea", "son"],
+        rooster: ["roos", "ter"],
+        saying: ["say", "ing"],
+        talking: ["talk", "ing"],
+        think: ["think"],
+        travelin: ["trav", "el", "in"],
+        wasted: ["wast", "ed"],
+        window: ["win", "dow"],
+        woman: ["wom", "an"],
+        wonder: ["won", "der"],
+        wondrin: ["wond", "rin"],
+        anymore: ["an", "y", "more"],
+        anyway: ["an", "y", "way"],
+
+        // ---------------------------
+        // Rainbow Connection
+        // ---------------------------
+        amazing: ["a", "maz", "ing"],
+        answered: ["an", "swered"],
+        asleep: ["a", "sleep"],
+        believe: ["be", "lieve"],
+        believed: ["be", "lieved"],
+        connection: ["con", "nec", "tion"],
+        dreamers: ["dream", "ers"],
+        illusion: ["il", "lu", "sion"],
+        illusions: ["il", "lu", "sions"],
+        laughter: ["laugh", "ter"],
+        lovers: ["lov", "ers"],
+        magic: ["mag", "ic"],
+        morning: ["morn", "ing"],
+        probably: ["prob", "ab", "ly"],
+        rainbow: ["rain", "bow"],
+        rainbows: ["rain", "bows"],
+        sailors: ["sail", "ors"],
+        somebody: ["some", "bod", "y"],
+        something: ["some", "thing"],
+        someday: ["some", "day"],
+        stargazing: ["star", "gaz", "ing"],
+        supposed: ["sup", "posed"],
+        visions: ["vi", "sions"],
+        voices: ["voic", "es"],
+        wonder: ["won", "der"],
+
+        // ---------------------------
+        // High Flight
+        // ---------------------------
+        climbed: ["climbed"],
+        delirious: ["de", "lir", "i", "ous"],
+        danced: ["danced"],
+        footless: ["foot", "less"],
+        joined: ["joined"],
+        laugh: ["laugh"],
+        mirth: ["mirth"],
+        silvered: ["sil", "verd"],
+        skies: ["skies"],
+        slipped: ["slipped"],
+        surly: ["sur", "ly"],
+        tumblin: ["tum", "blin"],
+        wings: ["wings"],
+
+        // ---------------------------
+        // The Visitor
+        // ---------------------------
+        "*": ["*"],
+        arrived: ["ar", "rived"],
+        courier: ["cour", "i", "er"],
+        cricket: ["crick", "et"],
+        elevator: ["el", "e", "va", "tor"],
+        figured: ["fig", "ured"],
+        hoppin: ["hop", "pin"],
+        mate: ["mate"],
+        miss: ["miss"],
+        people: ["peo", "ple"],
+        playin: ["play", "in"],
+        probly: ["prob", "ly"],
+        scrape: ["scrape"],
+        singin: ["sing", "in"],
+        twentieth: ["twen", "ti", "eth"],
+        unlikely: ["un", "like", "ly"],
+
+        // ---------------------------
+        // CONTRACTIONS: Don't Think Twice, It's All Right
+        // ---------------------------
+        "ain't": ["ain't"],
+        "can't": ["can't"],
+        "could've": ["could've"],
+        "couldn't": ["couldn't"],
+        "didn't": ["didn't"],
+        "doesn't": ["doesn't"],
+        "don't": ["don't"],
+        "hadn't": ["hadn't"],
+        "hasn't": ["hasn't"],
+        "haven't": ["haven't"],
+        "he's": ["he's"],
+        "i'd": ["i'd"],
+        "i'll": ["i'll"],
+        "i'm": ["i'm"],
+        "i've": ["i've"],
+        "isn't": ["isn't"],
+        "it's": ["it's"],
+        "let's": ["let's"],
+        "she's": ["she's"],
+        "shouldn't": ["shouldn't"],
+        "that's": ["that's"],
+        "there's": ["there's"],
+        "they'll": ["they'll"],
+        "they're": ["they're"],
+        "they've": ["they've"],
+        "wasn't": ["wasn't"],
+        "we're": ["we're"],
+        "weren't": ["weren't"],
+        "what's": ["what's"],
+        "where's": ["where's"],
+        "who's": ["who's"],
+        "won't": ["won't"],
+        "wouldn't": ["wouldn't"],
+        "you'd": ["you'd"],
+        "you'll": ["you'll"],
+        "you're": ["you're"],
+        "you've": ["you've"],
+
+        // ---------------------------
+        // CONTRACTIONS: Rainbow Connection
+        // ---------------------------
+        "what's": ["what's"],
+        "it's": ["it's"],
+        "didn't": ["didn't"],
+        "doesn't": ["doesn't"],
+        "there's": ["there's"],
+        "we've": ["we've"],
+        "he's": ["he's"],
+        "you're": ["you're"],
+
+        // ---------------------------
+        // CONTRACTIONS: High Flight
+        // ---------------------------
+        // (None commonly found; add if needed)
+
+        // ---------------------------
+        // CONTRACTIONS: The Visitor
+        // ---------------------------
+        "he'd": ["he'd"],
+        "he's": ["he's"],
+        "she's": ["she's"],
+        "it's": ["it's"],
+        "didn't": ["didn't"],
+        "can't": ["can't"],
+        "doesn't": ["doesn't"],
+        "there's": ["there's"],
+        "we're": ["we're"],
+        "you're": ["you're"],
+      };
+
+      function AP_extractSyllableAtPosition(line, charIndex) {
+        if (charIndex >= line.length) return "";
+
+        // Find word boundaries at this character position
+        let wordStart = charIndex;
+        while (wordStart > 0 && line[wordStart - 1] !== " ") {
+          wordStart--;
+        }
+
+        let wordEnd = charIndex;
+        while (wordEnd < line.length && line[wordEnd] !== " ") {
+          wordEnd++;
+        }
+
+        const word = line.substring(wordStart, wordEnd).trim().toLowerCase();
+        const cleanWord = word.replace(/[^\w]/g, "").toLowerCase();
+        const isFirstWord =
+          wordStart === 0 || line.substring(0, wordStart).trim() === "";
+
+        let result;
+
+        // Look up syllables in dictionary and calculate which syllable at this position
+        if (cleanWord in SYLLABLE_DICT) {
+          const syllables = SYLLABLE_DICT[cleanWord];
+          const positionInWord = charIndex - wordStart;
+
+          // Special cases for specific words
+          if (cleanWord === "rainbow") {
+            result = positionInWord < 4 ? "rain" : "bow";
+          } else if (cleanWord === "rainbows") {
+            result = positionInWord < 4 ? "rain" : "bows";
+          } else if (syllables.length === 1) {
+            result = word;
+          } else {
+            // Calculate actual syllable boundaries based on character counts
+            const syllableBoundaries = [];
+            let charCount = 0;
+            for (const syllable of syllables) {
+              charCount += syllable.length;
+              syllableBoundaries.push(charCount);
+            }
+            // Find which syllable contains this position
+            result = syllables[syllables.length - 1]; // default to last syllable
+            for (let i = 0; i < syllableBoundaries.length; i++) {
+              if (positionInWord < syllableBoundaries[i]) {
+                result = syllables[i];
+                break;
+              }
+            }
+          }
+        } else {
+          // Fallback: try stripped version, or just highlight the word as-is
+          if (cleanWord in SYLLABLE_DICT) {
+            const syllables = SYLLABLE_DICT[cleanWord];
+            result = syllables.length === 1 ? word : syllables[0];
+          } else {
+            result = word;
+          }
+        }
+
+        // Capitalize first word of line unless escaped with backslash
+        const originalWord = line.substring(wordStart, wordEnd).trim();
+        if (
+          isFirstWord &&
+          originalWord.length > 0 &&
+          !originalWord.startsWith("\\")
+        ) {
+          result = result.charAt(0).toUpperCase() + result.slice(1);
+        }
+
+        return result;
+      }
+
+      function PA_extractChordsAndWords(chordLine, lyricLine, beatPositions) {
+        const results = [];
+        for (const [beatNum, charIndex] of beatPositions) {
+          const chord = PA_extractItemAtPosition(chordLine, charIndex);
+          const word = PA_extractItemAtPosition(lyricLine, charIndex);
+          // debugger;
+          results.push([beatNum, chord, word]);
+        }
+        return results;
+      }
+
+      const CHORDS = [
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "A",
+        "B",
+        "Cm",
+        "Dm",
+        "Em",
+        "Fm",
+        "Gm",
+        "Am",
+        "Bm",
+        "C7",
+        "D7",
+        "E7",
+        "F7",
+        "G7",
+        "A7",
+        "B7",
+        "Cm7",
+        "Dm7",
+        "Em7",
+        "Fm7",
+        "Gm7",
+        "Am7",
+        "Bm7",
+        "Cmaj7",
+        "Dmaj7",
+        "Emaj7",
+        "Fmaj7",
+        "Gmaj7",
+        "Amaj7",
+        "Bmaj7",
+        "C♭",
+        "D♭",
+        "E♭",
+        "F♭",
+        "G♭",
+        "A♭",
+        "B♭",
+        "C♯",
+        "D♯",
+        "E♯",
+        "F♯",
+        "G♯",
+        "A♯",
+        "B♯",
+      ];
+
+      function PA_checkForChordLine(line, chords) {
+        if (!line) return false;
+        const words = line.split(/\s+/).filter((word) => word.trim());
+        const fortyPercentCount = Math.floor(0.4 * words.length);
+        let matchCount = 0;
+
+        for (const word of words) {
+          const cleanWord = word.replace(/[\[\]]/g, "");
+          if (chords.includes(cleanWord)) {
+            matchCount++;
+          }
+        }
+        return matchCount >= fortyPercentCount;
+      }
+	  
+	  
+	  
+	  
+		/// PA_categorize.js
+		// Procedural categorizer for songbook lines.
+		// Function signature: PA_categorizeLine(line)
+		// Depends on existing globals/functions in your codebase:
+		//  - PA_cleanText(line)   (must exist and return a string)
+		//  - PA_checkForChordLine(line, CHORDS)  (must exist; uses built-in 40% threshold)
+		//  - CHORDS               (array of known chord tokens)
+		//
+		// Return values (strings used elsewhere in your code):
+		//  "sections"  - valid section marker per rules
+		//  "beats"     - contains ZZZ token (exact token match, case-insensitive)
+		//  "chords"    - chord-line detected by PA_checkForChordLine
+		//  "lyrics"    - mostly letters & spaces (simple test)
+		//  "unknown"   - fallback / no rule matched
+
+
+		function PA_categorizeLine(line) {
+		  // Expect plain ASCII pre-cleaned text.
+		  if (line == null) return "unknown";
+		  var cleanedLine = String(line).trim();
+		  if (cleanedLine.length === 0) return "unknown";
+
+		  // 1) If line contains an asterisk token, treat as a lyric/instrument marker line.
+		  //    This ensures lines like "    *    *    *    *    I01  NB 02" end up in lyrics[].
+		  if (cleanedLine.indexOf('*') !== -1) return "lyrics";
+
+		  // 2) Section headers: allow optional {N} after the closing bracket also.
+		  var sectionMatch = cleanedLine.match(/^\[\s*([^\]\s]+)(?:\s([^\]]*))?\s*\](?:\s*\{\s*\d+\s*\})?$/);
+		  if (sectionMatch) {
+			var firstToken = sectionMatch[1].trim().toLowerCase();
+			var canonical = ['intro','verse','chorus','cricket','crickets','bridge','outro','outtro','instrumental','solo'];
+			if (canonical.indexOf(firstToken) !== -1) return "sections";
+		  }
+
+		  // 3) Beats: token "ZZZ" present -> beats
+		  var tokens = cleanedLine.split(/\s+/).filter(function(t){ return t.length > 0; });
+		  for (var ti = 0; ti < tokens.length; ti++) {
+			if (tokens[ti].toUpperCase() === 'ZZZ') return "beats";
+		  }
+
+		  // 4) Chords: if your chord checker exists, prefer it
+		  if (typeof PA_checkForChordLine === 'function') {
+			try {
+			  if (PA_checkForChordLine(cleanedLine, typeof CHORDS !== 'undefined' ? CHORDS : undefined)) return "chords";
+			} catch (e) {
+			  // ignore and continue
+			}
+		  }
+
+		  // 5) Lyrics fallback: mostly alphabetic characters (>= 75%)
+		  var nonSpace = cleanedLine.replace(/\s+/g,'');
+		  if (nonSpace.length > 0) {
+			var letters = nonSpace.match(/[A-Za-z]/g) || [];
+			var letterRatio = letters.length / nonSpace.length;
+			if (letterRatio >= 0.75 && /[A-Za-z]/.test(cleanedLine) && cleanedLine.toUpperCase().indexOf('ZZZ') === -1) {
+			  return "lyrics";
+			}
+		  }
+
+		  return "unknown";
+		}
+
+
+
+`		function PA_categorizeLine(line) {
+		  // Ensure PA_cleanText exists and run it first (per existing expectation)
+		  if (typeof PA_cleanText !== 'function') {
+			// defensive fallback: attempt to coerce to string
+			if (line == null) return "unknown";
+			line = String(line);
+		  }
+
+		  const cleanedLine = (typeof PA_cleanText === 'function') ? PA_cleanText(line) : String(line);
+		  if (typeof cleanedLine !== 'string') return "unknown";
+
+		  const s = cleanedLine.replace(/\u00A0/g, ' ').trim(); // normalize NBSP and trim
+		  if (s.length === 0) return "unknown";
+
+		  // 1) VALID single-word section between []
+		  // - The first token inside the brackets must be exactly one word (no internal spaces).
+		  // - Case-insensitive match against canonical section tokens.
+		  // - After the single section word there may be one space and then arbitrary characters before the closing ].
+		  // Examples matched: [Verse], [Verse 1], [Intro-extra], [Solo notes here]
+		  const sectionMatch = s.match(/^\[\s*([^\]\s]+)(?:\s([^\]]*))?\s*\]$/);
+		  if (sectionMatch) {
+			const firstToken = sectionMatch[1].trim();
+			// canonical list of section tokens (lowercase)
+			const canonical = ['intro','verse','chorus','cricket','crickets','bridge','outro','outtro','instrumental','solo'];
+			const firstLower = firstToken.toLowerCase();
+			for (let i = 0; i < canonical.length; i++) {
+			  if (firstLower === canonical[i]) {
+				return "sections";
+			  }
+			}
+			// If the first token isn't one of the canonical names, do NOT treat as a valid section per your rule.
+			// Fall through to other tests.
+		  }
+
+		  // Tokenize for beats and other checks
+		  const tokens = s.split(/\s+/).filter(function(t){ return t.length > 0; });
+		  const tokenCount = tokens.length;
+
+		  // 2) Beats: must be token exactly "ZZZ" (case-insensitive) -> return "beats"
+		  for (let i = 0; i < tokenCount; i++) {
+			if (tokens[i].toUpperCase() === 'ZZZ') {
+			  return "beats";
+			}
+		  }
+
+		  // 3) Chords: use existing chord checker (calls PA_checkForChordLine with global CHORDS)
+		  if (typeof PA_checkForChordLine === 'function') {
+			try {
+			  // Call with line and global CHORDS (your existing checker signature)
+			  if (PA_checkForChordLine(s, typeof CHORDS !== 'undefined' ? CHORDS : undefined)) {
+				return "chords";
+			  }
+			} catch (e) {
+			  // ignore errors and continue to next tests
+			}
+		  }
+
+		  // 4) Words/lyrics: simple test — mostly alphabetic characters & spaces
+		  // Compute ratio of alphabetic characters among non-space characters. If >= 75% treat as lyrics.
+		  const nonSpace = s.replace(/\s+/g, '');
+		  if (nonSpace.length > 0) {
+			const letterMatches = nonSpace.match(/[A-Za-z]/g) || [];
+			const lettersCount = letterMatches.length;
+			const letterRatio = lettersCount / nonSpace.length;
+			if (letterRatio >= 0.75 && /[A-Za-z]/.test(s)) {
+			  return "lyrics";
+			}
+		  }
+
+		  // Fallback
+		  return "unknown";
+		}
+`
+		// Export for tests/environments if needed (uncomment when using a module system)
+		// module.exports = { PA_checkForChordLine, PA_categorizeLine };
+//      function PA_categorizeLine(line) {
+//        const cleanedLine = PA_cleanText(line);
+//		
+//		console.log("line is " , cleanedLine );
+//		console.log("index is " , currentIndex );
+//
+//
+//      if (cleanedLine.includes("[") && cleanedLine.includes("]")) {
+//          return "sections";
+//        }
+//
+//        if (PA_checkForChordLine(cleanedLine, CHORDS)) {
+//          return "chords";
+//        }
+//
+//        const pattern = /[a-zA-Z\s]+/;
+//        if (pattern.test(cleanedLine)) {
+//          if (!cleanedLine.includes("ZZZ")) {
+//            return "lyrics";
+//          } else if (cleanedLine.includes("ZZZ")) {
+//            return "beats";
+//          }
+//        }
+//
+//        return "unknown";
+//      }
+
+      function PA_parseTimeSignature(timeSignatureStr) {
+        try {
+          if (timeSignatureStr.includes("/")) {
+            const parts = timeSignatureStr.split("/");
+            return [parseInt(parts[0]), parseInt(parts[1])];
+          }
+        } catch (e) {
+          console.log(
+            `Could not parse time signature: ${timeSignatureStr}, using 4/4`,
+          );
+        }
+        return [4, 4];
+      }
+
+      // Key revision: Now detects {N} in section headers and sets per-section bounce counts.
+      function PA_getSectionBounceCount(sectionHeader, defaultBounceCount) {
+        const match = sectionHeader.match(/\{(\d+)\}/);
+        if (match) {
+          return parseInt(match[1], 10);
+        }
+        return defaultBounceCount;
+      }
+
+      function PA_processSongData(data) {
+        const lines = data.split("\n").filter((line) => line.trim());
+
+        const title = lines[0] || "[No title]";
+        const timeSignatureStr = lines[1] || "4/4";
+        const remainingLines = lines.slice(2);
+
+        // Parse time signature and set song-specific timing
+        const [beatsPerMeasure, noteValue] =
+          PA_parseTimeSignature(timeSignatureStr);
+
+        // Set bounces per line and bounce duration based on time signature and song
+        // debugger;;
+
+        if (beatsPerMeasure === 3) {
+          // 3/4 time (Rainbow Connection)
+          BOUNCES_PER_LINE = 4;
+          BOUNCE_DURATION = BASE_BOUNCE_DURATION;
+        } else {
+          // 4/4 time (Don't Think Twice)
+          BOUNCES_PER_LINE = 4;
+          BOUNCE_DURATION = BASE_BOUNCE_DURATION;
+        }
+
+        // Apply speed multiplier
+        const speedMultiplier = speedValues[currentSpeedIndex];
+        BOUNCE_DURATION = BASE_BOUNCE_DURATION / speedMultiplier;
+
+        console.log(
+          `Time signature: ${beatsPerMeasure}/${noteValue}, Bounces per line: ${BOUNCES_PER_LINE}, Bounce duration: ${BOUNCE_DURATION}`,
+        );
+
+        sections = [];
+        chords = [];
+        lyrics = [];
+        beats = [];
+        beatChordWordData = {};
+
+        sectionBounceCounts = []; // Reset for new song
+
+        for (let i = 0; i < remainingLines.length; i++) {
+          const line = remainingLines[i];
+          const lineType = PA_categorizeLine(line);
+
+          if (lineType === "sections") {
+            sections.push(line);
+            // --- NEW: set bounce count for this section ---
+            // assume default is BOUNCES_PER_LINE * 1 line per section header.
+            // If you want to count lyric lines per section, you can enhance this logic.
+            const defaultBounceCount = BOUNCES_PER_LINE; // or customize as needed
+            const bounceCount = PA_getSectionBounceCount(line, defaultBounceCount);
+            sectionBounceCounts.push(bounceCount);
+          } else if (lineType === "chords") {
+            chords.push(line);
+          } else if (lineType === "lyrics") {
+            lyrics.push(line);
+          } else if (lineType === "beats") {
+            beats.push(line);
+
+            const cleanedBeatLine = BOTH_getRidOfLL(line);
+            const beatPositions = BOTH_findBeatPositions(cleanedBeatLine);
+            const beatLineIndex = beats.length - 1;
+
+            if (
+              beatLineIndex < chords.length &&
+              beatLineIndex < lyrics.length
+            ) {
+              const chordLine = BOTH_getRidOfLL(chords[beatLineIndex]);
+              const lyricLine = BOTH_getRidOfLL(lyrics[beatLineIndex]);
+              const chordWordData = PA_extractChordsAndWords(
+                chordLine,
+                lyricLine,
+                beatPositions,
+              );
+              beatChordWordData[beatLineIndex] = chordWordData;
+            }
+          }
+        }
+
+        for (
+          let i = 0;
+          i <
+          Math.max(lyrics.length, chords.length, beats.length, sections.length);
+          i++
+        ) {
+          if (i < lyrics.length) lyrics[i] = BOTH_getRidOfLL(lyrics[i]);
+          if (i < chords.length) chords[i] = BOTH_getRidOfLL(chords[i]);
+          if (i < beats.length) beats[i] = BOTH_getRidOfLL(beats[i]);
+          if (i < sections.length) sections[i] = BOTH_getRidOfLL(sections[i]);
+        }
+
+        console.log(
+          `Loaded: ${sections.length} sections, ${chords.length} chords, ${lyrics.length} lyrics, ${beats.length} beats`,
+        );
+		//debugger;
+        // Extract beat numbers from first beat line (like Python version)
+        if (beats.length > 0) {
+          const firstBeatLine = beats[0];
+          BEAT_NUMBERS = [];
+          const regex = /\d+/g;
+          let match;
+          while ((match = regex.exec(firstBeatLine)) !== null) {
+            const beatNum = parseInt(match[0]);
+            if (beatNum >= 1 && beatNum <= 15) {
+              BEAT_NUMBERS.push(beatNum);
+            }
+          }
+          console.log("Beat numbers (from file):", BEAT_NUMBERS);
+        } else {
+          BEAT_NUMBERS = [];
+          console.log("⚠️ No beat numbers found in file!");
+        }
+
+        songData.title = title;
+        songData.timeSignature = timeSignatureStr;
+      }
+
+      // 1. Helper: Determine asset source based on ?a
+      function PA_getAssetSource(assetFile) {
+        const params = new URLSearchParams(window.location.search);
+        const aParam = params.get("a");
+        if (!aParam) {
+          // Default: Pages
+          return ASSET_BASE_URL + assetFile;
+        } else if (aParam === "local") {
+          // Local
+          return "/a/" + assetFile;
+        } else if (aParam.startsWith("http")) {
+          // External URL
+          return aParam + assetFile;
+        }
+      }
+
+      // Returns a status color string expected elsewhere: "green", "orange", "purple", "pink", "grey", "black"
+      function PA_getAssetColor(assetFile, aParam) {
+        if (!aParam) return "green"; // default (Pages)
+        if (aParam === "local") return "orange";
+        if (typeof aParam === "string" && aParam.startsWith("http"))
+          return "purple";
+        return "grey";
+      }
+
+      // ----------------------------
+      // Loader: images then song
+      // ----------------------------
+      function PA_loadAssetsAndSong(songKey) {
+        // Reset all balls to grey
+        assetStatus.tape_deck = "grey";
+        assetStatus.mag_tape = "grey";
+        assetStatus.background = "grey";
+        assetStatus.song = "grey";
+        AP_drawAssetStatusBallsOnCanvas();
+
+        const params = new URLSearchParams(window.location.search);
+        const aParam = params.get("a");
+
+        const images = [
+          { name: "tape_deck", file: "controls.jpg" },
+          { name: "mag_tape", file: "magtape.jpg" },
+          { name: "background", file: "background.jpg" },
+        ];
+
+        let i = 0;
+        function loadNextImage() {
+          if (i >= images.length) {
+            // Only try song if ALL images succeeded (none turned black)
+            if (
+              assetStatus.tape_deck !== "black" &&
+              assetStatus.mag_tape !== "black" &&
+              assetStatus.background !== "black"
+            ) {
+              PA_loadSongAsset(songKey, aParam);
+            }
+            return;
+          }
+
+          const info = images[i];
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+
+          img.onload = function () {
+            // pick color according to source (green/orange/purple)
+            assetStatus[info.name] = PA_getAssetColor(info.file, aParam);
+            // assign to the local variables used by render()
+            if (info.name === "tape_deck") {
+              controlsImage = img;
+              // controls image available -> recalc button coords right away
+              AP_scaleButtonCoords();
+            } else if (info.name === "mag_tape") {
+              magTapeImage = img;
+            } else if (info.name === "background") {
+              backgroundImage = img;
+            }
+
+            AP_drawAssetStatusBallsOnCanvas(); // quick visual update
+            i++;
+            loadNextImage();
+          };
+          img.onerror = function () {
+            assetStatus[info.name] = "black";
+            AP_drawAssetStatusBallsOnCanvas();
+            alert(
+              `Error loading ${info.file} from ${PA_getAssetSource(info.file, aParam)}`,
+            );
+            // STOP. Do not try song.
+          };
+          img.src = PA_getAssetSource(info.file, aParam); // your asset source selector
+        }
+        loadNextImage();
+      }
+      // 3. Loader: Song, with embedded fallback
+      function PA_loadSongAsset(songKey, aParam) {
+        // Only try if all images succeeded (no black balls)
+        if (
+          assetStatus.tape_deck === "black" ||
+          assetStatus.mag_tape === "black" ||
+          assetStatus.background === "black"
+        ) {
+          assetStatus.song = "grey";
+          AP_drawAssetStatusBallsOnCanvas();
+          return;
+        }
+
+        // Determine source order for song
+        let color = PA_getAssetColor(songFileMap[songKey], aParam);
+        const fileName = songFileMap[songKey];
+
+        if (fileName) {
+          const src = PA_getAssetSource(fileName, aParam);
+          fetch(src)
+            .then((res) => (res.ok ? res.text() : Promise.reject()))
+            .then((text) => {
+              assetStatus.song = color;
+              AP_drawAssetStatusBallsOnCanvas();
+              PA_processSongData(text);
+            })
+            .catch(() => {
+              // Fallback to embed
+              if (embeddedSongs[songKey]) {
+                assetStatus.song = "pink";
+                AP_drawAssetStatusBallsOnCanvas();
+                PA_processSongData(embeddedSongs[songKey]);
+              } else {
+                assetStatus.song = "black";
+                AP_drawAssetStatusBallsOnCanvas();
+                alert("ERROR: Song could not be loaded from any source.");
+              }
+            });
+        } else {
+          // No file, try embed directly
+          if (embeddedSongs[songKey]) {
+            assetStatus.song = "pink";
+            AP_drawAssetStatusBallsOnCanvas();
+            PA_processSongData(embeddedSongs[songKey]);
+          } else {
+            assetStatus.song = "black";
+            AP_drawAssetStatusBallsOnCanvas();
+            alert("ERROR: Song could not be loaded from any source.");
+          }
+        }
+      }
+
+      songSelector.addEventListener("change", function (e) {
+        const songKey = e.target.value;
+        if (!songKey) {
+          document.getElementById("loadingStatus").textContent =
+            "Select a song to begin...";
+          return;
+        }
+        document.getElementById("loadingStatus").textContent =
+          "Loading " + songKey + "...";
+        currentSongKey = songKey;
+        PA_loadAssetsAndSong(songKey);
+      });
+
+      function AP_interpolateColor(color1, color2, factor) {
+        const r = Math.floor(color1[0] + (color2[0] - color1[0]) * factor);
+        const g = Math.floor(color1[1] + (color2[1] - color1[1]) * factor);
+        const b = Math.floor(color1[2] + (color2[2] - color1[2]) * factor);
+        return [r, g, b];
+      }
+
+      function AP_colorToString(color) {
+        return `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+      }
+
+      function AP_resetSong() {
+        // reset animation state
+        currentIndex = 0;
+        bounceCount = 0;
+        ballY = BALL_HIGH_POSITION;
+        bounceStartTime = null;
+        songPaused = false;
+        songLineNumber = 1;
+        rising = false;
+        falling = true;
+        waitingForStart = true;
+
+        // stop and rewind audio (safe-guard if audioElement missing)
+        try {
+          if (audioElement) {
+            audioElement.pause();
+            audioElement.currentTime = 0;
+          }
+        } catch (e) {
+          console.warn("resetSong: audio stop failed", e);
+        }
+
+        // keep lastAudioPlaying authoritative and update visuals
+        lastAudioPlaying = false;
+        const emoji = document.getElementById("musicEmojis");
+        if (emoji) emoji.classList.add("emoji-fill");
+
+        AP_updatePlayButton();
+      }
+
+      function AP_updatePlayButton() {
+        if (waitingForStart) {
+          playButton.textContent = currentIndex === 0 ? "▶ PLAY" : "↻ RESTART";
+          playButton.className = "";
+        } else if (songPaused) {
+          playButton.textContent = "▶ PLAY";
+          playButton.className = "paused";
+        } else {
+          playButton.textContent = "⏸ PAUSE";
+          playButton.className = "";
+        }
+      }
+
+      function AP_togglePlayback() {
+        if (!currentSongKey) {
+          alert("Please select a song first");
+          return;
+        }
+
+        if (waitingForStart) {
+          if (currentIndex > 0) {
+            AP_resetSong();
+          }
+          waitingForStart = false;
+          bounceStartTime = performance.now() / 1000;
+        } else if (songPaused) {
+          const pauseDuration = performance.now() / 1000 - pauseTime;
+          bounceStartTime += pauseDuration;
+          songPaused = false;
+        } else {
+          songPaused = true;
+          pauseTime = performance.now() / 1000;
+        }
+        AP_updatePlayButton();
+      }
+
+      let pauseTime = 0;
+
+      // Keyboard controls
+      document.addEventListener("keydown", function (e) {
+        if (e.code === "Space") {
+          e.preventDefault();
+          AP_togglePlayback();
+        } else if (e.code === "KeyR") {
+          e.preventDefault();
+          AP_resetSong();
+          waitingForStart = true;
+          AP_updatePlayButton();
+        } else if (e.code === "Escape" || e.code === "KeyQ") {
+          e.preventDefault();
+          running = false;
+          ctx.fillStyle = "#1e1e1e";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#00ff00";
+          ctx.font = "bold 28px Courier New";
+          ctx.textAlign = "center";
+
+          // Try to get the folder path
+          let folderPath = "";
+          try {
+            if (window.location.protocol === "file:") {
+              const fullPath = decodeURIComponent(window.location.pathname);
+              const lastSlash = Math.max(
+                fullPath.lastIndexOf("/"),
+                fullPath.lastIndexOf("\\"),
+              );
+              if (lastSlash > 0) {
+                folderPath = fullPath.substring(0, lastSlash);
+                // Clean up the path for different OS formats
+                if (folderPath.startsWith("/") && folderPath.includes(":")) {
+                  folderPath = folderPath.substring(1); // Remove leading slash on Windows
+                }
+              }
+            }
+          } catch (e) {
+            // Ignore errors, just won't show folder path
+          }
+
+          ctx.fillText(
+            "To close the program you must close this tab or window,",
+            canvas.width / 2,
+            canvas.height / 2 - 40,
+          );
+          if (folderPath) {
+            ctx.fillText(
+              "or go back to the folder you started from:",
+              canvas.width / 2,
+              canvas.height / 2,
+            );
+            ctx.font = "bold 24px Courier New";
+            ctx.fillText(folderPath, canvas.width / 2, canvas.height / 2 + 40);
+          } else {
+            ctx.fillText(
+              "or go back to the folder you started this program from.",
+              canvas.width / 2,
+              canvas.height / 2,
+            );
+          }
+          ctx.textAlign = "left";
+        } else if (e.code === "KeyD") {
+          e.preventDefault();
+          debugMode = !debugMode;
+          debugInfo.style.display = debugMode ? "block" : "none";
+          console.log(`Debug mode: ${debugMode}`);
+        }
+      });
+
+      // Canvas click handler: Ctrl+Click for music, normal click for teleprompter
+
+      canvas.addEventListener("click", function (e) {
+        const rect = canvas.getBoundingClientRect();
+
+        // Ctrl+Click: MUSIC/EMOJI CONTROL ONLY
+        if (e.ctrlKey) {
+          const mousePos = [e.clientX - rect.left, e.clientY - rect.top];
+          const button = AP_checkButtonClick(mousePos, scaledButtonCoords);
+
+          if (button === "forward") {
+            AP_togglePlayback(); // at the moment all this does is prompt the user to select a song
+            // Song start
+            audioElement.pause();
+            audioElement.currentTime = 0;
+            audioElement.play();
+            // Animation start
+            AP_resetSong();
+            waitingForStart = true;
+            songPaused = false;
+            pauseTime = 0;
+            bounceStartTime = performance.now() / 1000;
+
+            AP_updatePlayButton();
+
+            //					audioElement.play().catch(function(err) {
+            //						alert("Music could not be played: " //+ err.message);
+            //						console.log(err);
+            //					});
+            return;
+          } else if (button === "pause") {
+            // Toggle music pause/play
+            if (audioElement.paused) {
+              audioElement.play().catch(function (err) {
+                alert("Music could not be played: " + err.message);
+                console.log(err);
+              });
+            } else {
+              audioElement.pause();
+            }
+            return;
+          } else if (button === "stop_eject") {
+            audioElement.pause();
+            audioElement.currentTime = 0;
+            return;
+          }
+          // If Ctrl+Click but not on a music control, fall through to normal click logic.
+        }
+
+        // NORMAL CLICK: teleprompter/animation as before
+        const mousePos = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        };
+
+        // Check if clicking on controls image (for lyric animation)
+        if (
+          Object.keys(scaledButtonCoords).length > 0 &&
+          AP_handleControlsClick(mousePos)
+        ) {
+          return;
+        }
+
+        // Check if clicking on progress indicator
+        if (AP_isInProgressIndicator(mousePos.x, mousePos.y)) {
+          isDragging = true;
+          AP_handleProgressDrag(e.clientX, e.clientY);
+          return;
+        }
+
+        // Otherwise, general play/pause for teleprompter
+        e.preventDefault();
+        AP_togglePlayback();
+      });
+
+      canvas.addEventListener("dblclick", function (event) {
+        const rect = canvas.getBoundingClientRect();
+
+        const mousePos = [event.clientX - rect.left, event.clientY - rect.top];
+        const button = AP_checkButtonClick(mousePos, scaledButtonCoords);
+
+        if (button === "forward") {
+          document.getElementById("musicEmojis").classList.remove("emoji-fill");
+          audioElement.currentTime = 0;
+          audioElement.play().catch(function (e) {
+            alert("Music could not be played: " + e.message);
+            console.log(e);
+          });
+          // Emoji color now updates based on actual audio state using isAudioActuallyPlaying()
+        } else if (button === "stop_eject") {
+          audioElement.pause();
+          audioElement.currentTime = 0;
+          document.getElementById("musicEmojis").classList.add("emoji-fill");
+          // Emoji color now updates based on actual audio state using isAudioActuallyPlaying()
+        }
+      });
+
+      canvas.addEventListener("touchstart", function (e) {
+        if (e.touches.length === 1) {
+          const touch = e.touches[0];
+          const rect = canvas.getBoundingClientRect();
+          const touchPos = {
+            x: touch.clientX - rect.left,
+            y: touch.clientY - rect.top,
+          };
+
+          // Check controls first
+          if (
+            Object.keys(scaledButtonCoords).length > 0 &&
+            AP_handleControlsClick(touchPos)
+          ) {
+            e.preventDefault();
+            return;
+          }
+
+          // Check progress indicator
+          if (AP_isInProgressIndicator(touchPos.x, touchPos.y)) {
+            isDragging = true;
+            AP_handleProgressDrag(touch.clientX, touch.clientY);
+            e.preventDefault();
+            return;
+          }
+
+          // General play/pause
+          e.preventDefault();
+          AP_togglePlayback();
+        }
+      });
+
+      // Play button controls
+      playButton.addEventListener("click", function (e) {
+        e.preventDefault();
+        AP_togglePlayback();
+      });
+
+      playButton.addEventListener("touchstart", function (e) {
+        e.preventDefault();
+        AP_togglePlayback();
+      });
+
+      // Restart button controls
+      restartButton.addEventListener("click", function (e) {
+        e.preventDefault();
+        AP_resetSong();
+        waitingForStart = true;
+        AP_updatePlayButton();
+      });
+
+      restartButton.addEventListener("touchstart", function (e) {
+        e.preventDefault();
+        AP_resetSong();
+        waitingForStart = true;
+        AP_updatePlayButton();
+      });
+
+      // Progress indicator drag functionality
+      function AP_getProgressIndicatorRect() {
+        if (magTapeImage && magTapeImage.complete) {
+          const tapeHeight = canvas.height / 8;
+          return {
+            x: 0,
+            y: 0,
+            width: canvas.width,
+            height: tapeHeight,
+          };
+        }
+        return null;
+      }
+
+      function AP_isInProgressIndicator(x, y) {
+        const rect = AP_getProgressIndicatorRect();
+        return (
+          rect &&
+          x >= rect.x &&
+          x <= rect.x + rect.width &&
+          y >= rect.y &&
+          y <= rect.y + rect.height
+        );
+      }
+
+      function AP_handleProgressDrag(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+
+        if (lyrics.length > 0) {
+          const progress = Math.max(0, Math.min(1, x / canvas.width));
+          const newIndex = Math.floor(progress * lyrics.length);
+          currentIndex = Math.min(newIndex, lyrics.length - 1);
+          songLineNumber = currentIndex + 1;
+          bounceCount = 0;
+          ballY = BALL_HIGH_POSITION;
+          bounceStartTime = performance.now() / 1000;
+        }
+      }
+
+      // Mouse drag events
+      canvas.addEventListener("mousedown", function (e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        if (AP_isInProgressIndicator(x, y)) {
+          isDragging = true;
+          AP_handleProgressDrag(e.clientX, e.clientY);
+          e.preventDefault();
+        }
+      });
+
+      document.addEventListener("mousemove", function (e) {
+        if (isDragging) {
+          AP_handleProgressDrag(e.clientX, e.clientY);
+          e.preventDefault();
+        }
+      });
+
+      document.addEventListener("mouseup", function (e) {
+        if (isDragging) {
+          isDragging = false;
+          e.preventDefault();
+        }
+      });
+
+      // Touch drag events
+      document.addEventListener("touchmove", function (e) {
+        if (isDragging && e.touches.length === 1) {
+          const touch = e.touches[0];
+          AP_handleProgressDrag(touch.clientX, touch.clientY);
+          e.preventDefault();
+        }
+      });
+
+      document.addEventListener("touchend", function (e) {
+        if (isDragging) {
+          isDragging = false;
+          e.preventDefault();
+        }
+      });
+
+      // Prevent context menu on long press
+      canvas.addEventListener("contextmenu", function (e) {
+        e.preventDefault();
+      });
+
+      function AP_renderText(
+        text,
+        x,
+        y,
+        color,
+        fontSize = 40,
+        align = "left",
+        baseline = "alphabetic",
+      ) {
+        ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+        ctx.textAlign = align; // 'left' | 'center' | 'right'
+        ctx.textBaseline = baseline; // 'alphabetic' | 'top' | 'bottom' | etc.
+        // subtle stroke for readability, then fill
+        ctx.lineWidth = Math.max(1, Math.round(fontSize * 0.06));
+        ctx.strokeStyle = "rgba(0,0,0,0.65)";
+        ctx.strokeText(text, x, y);
+        ctx.fillStyle = AP_colorToString(color);
+        ctx.fillText(text, x, y);
+        // return measured width so callers can easily center if needed
+        return ctx.measureText(text).width;
+      }
+
+      function AP_calculatePixelPosition(text, x, charIndex, fontSize = 40) {
+        if (charIndex >= text.length) return x;
+
+        ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+        const textBefore = text.substring(0, charIndex);
+        const width = ctx.measureText(textBefore).width;
+        return x + width;
+      }
+
+      function AP_renderWordAtPosition(word, x, y, color, fontSize = 40) {
+        ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+        ctx.fillStyle = AP_colorToString(color);
+        ctx.fillText(word, x, y);
+      }
+
+      function AP_render() {
+        if (!running) return;
+
+        // sample audio state once per frame
+        const audioSnapshot = AP_syncAudioUI();
+        if (audioSnapshot.playingNow !== lastAudioPlaying) {
+          // Update the in-memory state first
+          lastAudioPlaying = audioSnapshot.playingNow;
+
+          // Now reflect that change in the UI
+          const listenBtn = document.getElementById("listenButton");
+          const playListenBtn = document.getElementById("playListenButton");
+          const emojiSpan = document.getElementById("musicEmojis");
+
+          function setPlayingVisualSimple(btn) {
+            if (!btn) return;
+            btn.classList.remove("paused");
+            btn.textContent = "⏸ PAUSE";
+          }
+          function setPausedVisualSimple(btn) {
+            if (!btn) return;
+            btn.classList.add("paused");
+            btn.textContent =
+              btn.dataset && btn.dataset.orig ? btn.dataset.orig : "▶";
+          }
+
+          if (lastAudioPlaying) {
+            // audio started
+            setPlayingVisualSimple(listenBtn);
+            setPlayingVisualSimple(playListenBtn);
+            if (emojiSpan) emojiSpan.classList.remove("emoji-fill");
+          } else {
+            // audio stopped/paused
+            setPausedVisualSimple(listenBtn);
+            setPausedVisualSimple(playListenBtn);
+            if (emojiSpan) emojiSpan.classList.add("emoji-fill");
+          }
+        }
+
+        const currentTime = performance.now() / 1000;
+
+        // Clear canvas
+        ctx.fillStyle = "#1e1e1e";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw background (may cover things) — asset-status balls will be drawn last
+        if (
+          backgroundImage &&
+          backgroundImage.complete &&
+          backgroundImage.naturalWidth > 0
+        ) {
+          ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+        }
+
+        // Draw magnetic tape at top
+        if (
+          magTapeImage &&
+          magTapeImage.complete &&
+          magTapeImage.naturalWidth > 0
+        ) {
+          const tapeHeight = canvas.height / 8;
+          ctx.drawImage(magTapeImage, 0, 0, canvas.width, tapeHeight);
+
+          // Draw position indicator
+          if (!waitingForStart && lyrics.length > 0) {
+            const indicatorWidth = 8;
+            const positionX = (currentIndex / lyrics.length) * canvas.width;
+            const indicatorHeight = tapeHeight / 2;
+            const indicatorY = tapeHeight / 4;
+
+            const rectX = Math.max(
+              0,
+              Math.min(
+                positionX - indicatorWidth / 2,
+                canvas.width - indicatorWidth,
+              ),
+            );
+
+            ctx.fillStyle = AP_colorToString([0, 255, 0]);
+            ctx.fillRect(rectX, indicatorY, indicatorWidth, indicatorHeight);
+
+            // Draw circle for drag handle
+            ctx.beginPath();
+            ctx.arc(
+              rectX + indicatorWidth / 2,
+              indicatorY + indicatorHeight / 2,
+              5,
+              0,
+              2 * Math.PI,
+            );
+            ctx.fillStyle = "#ffffff";
+            ctx.fill();
+          }
+        }
+
+        // Draw controls image and button outlines
+        if (
+          controlsImage &&
+          controlsImage.complete &&
+          controlsImage.naturalWidth > 0
+        ) {
+          const controlsHeight = canvas.height / 3 + 72;
+          const controlsWidth =
+            (controlsImage.width * controlsHeight) / controlsImage.height;
+          const controlsY = canvas.height - controlsHeight - 20;
+          const controlsX = 20;
+
+          ctx.drawImage(
+            controlsImage,
+            controlsX,
+            controlsY,
+            controlsWidth,
+            controlsHeight,
+          );
+
+          // Draw button outlines for visual feedback
+          AP_drawButtonOutlines();
+
+          // Draw line number on controls
+          if (!waitingForStart) {
+            ctx.font = "bold 40px Courier New";
+            ctx.fillStyle = AP_colorToString([0, 255, 0]);
+            const progressText = String(songLineNumber).padStart(3, "0");
+            ctx.fillText(progressText, controlsX + 50, controlsY + 60);
+          }
+        }
+
+        // Rescale button coordinates if controlsImage available
+        if (controlsImage && controlsImage.complete) {
+          AP_scaleButtonCoords();
+        }
+
+        // Draw title and time signature
+        if (songData.title) {
+          AP_renderText(songData.title, 50, POSITION_TITLE, [0, 255, 0]);
+        }
+        if (songData.timeSignature) {
+          AP_renderText(
+            songData.timeSignature,
+            50,
+            POSITION_TIME_SIGNATURE,
+            [0, 255, 0],
+          );
+        }
+
+        // Draw messages
+        if (waitingForStart && !currentSongKey) {
+          const message = "Press Play or spacebar";
+          AP_renderText(
+            message,
+            canvas.width - 1000,
+            canvas.height - 500,
+            [255, 255, 255],
+          );
+        } else if (waitingForStart) {
+          const message =
+            currentIndex === 0 ? "Press Play or spacebar" : "Play or spacebar";
+          AP_renderText(
+            message,
+            canvas.width - 1000,
+            canvas.height - 500,
+            [255, 255, 255],
+          );
+        }
+		
+        // Draw lyrics, chords, sections, highlighting, etc.
+        if (
+          lyrics.length > 0 &&
+          chords.length > 0 &&
+          (!waitingForStart || (waitingForStart && currentIndex > 0))
+        ) {
+          const chordText = chords[currentIndex % chords.length].replace(
+            /\[|\]/g,
+            "",
+          );
+          const lyricText = lyrics[currentIndex % lyrics.length];
+
+          let highlightingActive = false;
+          const shouldHighlightBall =
+            currentIndex in beatChordWordData && rising;
+
+          if (shouldHighlightBall) {
+            const currentBeatData = beatChordWordData[currentIndex];
+            // Use correct beat number calculation like Python version
+            const currentBeatNumber =
+              BEAT_NUMBERS.length > 0
+                ? BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length]
+                : bounceCount + 1;
+
+            for (const [beatNum, chord, word] of currentBeatData) {
+              if (beatNum === currentBeatNumber) {
+                highlightingActive = true;
+
+                const dt = currentTime - bounceStartTime;
+                const beatProgress = (dt % BOUNCE_DURATION) / BOUNCE_DURATION;
+                const beatFactor = rising ? beatProgress : 1.0 - beatProgress;
+
+                // Render base text
+                AP_renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+                AP_renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
+
+                // Find beat positions and highlight
+                const beatPositions = BOTH_findBeatPositions(
+                  BOTH_getRidOfLL(beats[currentIndex]),
+                );
+
+                for (const [bNum, charIndex] of beatPositions) {
+                  if (bNum === beatNum) {
+                    if (word) {
+                      const syllable = AP_extractSyllableAtPosition(
+                        lyricText,
+                        charIndex,
+                      );
+                      const pixelX = AP_calculatePixelPosition(
+                        lyricText,
+                        50,
+                        charIndex,
+                      );
+                      const highlightColor = AP_interpolateColor(
+                        [255, 255, 255],
+                        [0, 255, 255],
+                        beatFactor,
+                      );
+
+                      // Clear background for highlighted word
+                      ctx.fillStyle = "#1e1e1e";
+                      const syllableWidth = ctx.measureText(syllable).width;
+                      ctx.fillRect(
+                        pixelX,
+                        POSITION_LYRIC_LINE - 35,
+                        syllableWidth,
+                        45,
+                      );
+
+                      // Draw highlighted syllable
+                      AP_renderWordAtPosition(
+                        syllable,
+                        pixelX,
+                        POSITION_LYRIC_LINE,
+                        highlightColor,
+                      );
+                    }
+
+                    if (chord) {
+                      const pixelX = AP_calculatePixelPosition(
+                        chordText,
+                        50,
+                        charIndex,
+                      );
+                      const highlightColor = AP_interpolateColor(
+                        [255, 165, 0],
+                        [255, 255, 0],
+                        beatFactor,
+                      );
+
+                      // Clear background for highlighted chord
+                      ctx.fillStyle = "#1e1e1e";
+                      const chordWidth = ctx.measureText(chord).width;
+                      ctx.fillRect(
+                        pixelX,
+                        POSITION_CHORDS - 35,
+                        chordWidth,
+                        45,
+                      );
+
+                      // Draw highlighted chord
+                      AP_renderWordAtPosition(
+                        chord,
+                        pixelX,
+                        POSITION_CHORDS,
+                        highlightColor,
+                      );
+                    }
+                    break;
+                  }
+                }
+                break;
+              }
+            }
+          }
+
+          if (!highlightingActive) {
+            AP_renderText(chordText, 50, POSITION_CHORDS, [255, 165, 0]);
+            AP_renderText(lyricText, 50, POSITION_LYRIC_LINE, [255, 255, 255]);
+          }
+
+          if (sections.length > 0) {
+            AP_renderText(
+              sections[currentIndex % sections.length],
+              50,
+              POSITION_SECTION,
+              [0, 0, 255],
+            );
+          }
+        }
+
+        // Update debug info
+        if (debugMode && debugData) {
+          let debugText = `Line: ${currentIndex + 1}/${lyrics.length}\n`;
+          debugText += `Bounce: ${bounceCount}/${BOUNCES_PER_LINE}\n`;
+          debugText += `Beat Numbers: [${BEAT_NUMBERS.join(", ")}]\n`;
+          debugText += `Playback Mode: ${playbackMode}\n`;
+          debugText += `Speed: ${speedLabels[currentSpeedIndex]}\n`;
+          debugText += `Duration: ${BOUNCE_DURATION.toFixed(3)}s\n`;
+          if (BEAT_NUMBERS.length > 0) {
+            const currentBeatNumber =
+              BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length];
+            debugText += `Current Beat: ${currentBeatNumber}\n`;
+          }
+          debugData.innerHTML = debugText.replace(/\n/g, "<br>");
+        }
+
+        // Ball physics and movement
+        if (!songPaused && !waitingForStart && bounceStartTime !== null) {
+          const dt = currentTime - bounceStartTime;
+
+          if (dt <= BOUNCE_DURATION) {
+            const fallTime = BOUNCE_DURATION / 2;
+
+            if (dt <= fallTime) {
+              falling = true;
+              rising = false;
+              ballY = ballTop + 0.5 * gravity * dt ** 2;
+              if (ballY >= ballBottom) ballY = ballBottom;
+            } else {
+              const riseTime = dt - fallTime;
+              falling = false;
+              rising = true;
+              const remainingRiseTime = fallTime - riseTime;
+              ballY = ballTop + 0.5 * gravity * remainingRiseTime ** 2;
+              if (ballY < ballTop) ballY = ballTop;
+            }
+          } else {
+            // Complete bounce cycle - start new bounce
+            bounceStartTime = currentTime;
+            ballY = ballTop;
+            bounceCount++;
+
+            // Advance text every BOUNCES_PER_LINE bounces
+            if (bounceCount >= BOUNCES_PER_LINE) {
+              bounceCount = 0;
+              if (lyrics.length > 0) {
+                if (currentIndex < lyrics.length - 1) {
+                  currentIndex++;
+                  songLineNumber++;
+                } else {
+                  waitingForStart = true;
+                  AP_updatePlayButton();
+                }
+              }
+            }
+          }
+        } else if (waitingForStart) {
+          ballY = BALL_HIGH_POSITION;
+        }
+
+        // Draw ball with highlighting
+        const shouldHighlightBall =
+          currentIndex in beatChordWordData &&
+          rising &&
+          BEAT_NUMBERS.length > 0 &&
+          beatChordWordData[currentIndex].some(
+            ([beatNum]) =>
+              beatNum === BEAT_NUMBERS[bounceCount % BEAT_NUMBERS.length],
+          );
+
+        ctx.beginPath();
+        ctx.arc(ballCenterX, ballY, ballRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = shouldHighlightBall ? "#00ff00" : "#ee7621";
+        ctx.fill();
+
+        // draw emojis for audio playing indicator
+        AP_drawMusicEmojis();
+
+        // draw the asset-status balls LAST so they're visible on top of background/controls
+        AP_drawAssetStatusBallsOnCanvas();
+
+        requestAnimationFrame(AP_render);
+      }
+
+      // Initialize and start
+      AP_initBallPhysics();
+      AP_updatePlayButton();
+      AP_render();
+
+      // Make canvas focusable for keyboard input
+      canvas.setAttribute("tabindex", "0");
+      canvas.focus();
+
+      // Handle window resize
+      window.addEventListener("resize", function () {
+        AP_resizeCanvas();
+        AP_initBallPhysics();
+        AP_scaleButtonCoords();
+      });
+
+      function AP_drawAssetStatusBallsOnCanvas() {
+        const ctx = canvas.getContext("2d");
+
+        // Fixed visual constants
+        const OFFSETX = 200;
+        const OFFSETY = 40;
+        const RADIUS = 14;
+        const DEFAULT_FILL_COLOR = "#00cc66";
+        const POSITIONS = [
+          { x: 120 + OFFSETX, y: 510 + OFFSETY },
+          { x: 220 + OFFSETX, y: 510 + OFFSETY },
+          { x: 320 + OFFSETX, y: 510 + OFFSETY },
+          { x: 420 + OFFSETX, y: 510 + OFFSETY },
+        ];
+
+        ctx.save();
+
+        // Use assetStatus -> array
+        const assetsArr = Object.keys(assetStatus).map((k) => ({
+          name: k,
+          status: assetStatus[k],
+        }));
+
+        for (let i = 0; i < assetsArr.length; i++) {
+          const item = assetsArr[i];
+
+          // Internal name
+          const name =
+            typeof item === "string"
+              ? item
+              : item.name || item.label || item.id || "";
+
+          // Determine fill color (explicit fields first, then status keywords)
+          let color = DEFAULT_FILL_COLOR;
+          if (item && (item.color || item.fill)) {
+            color = item.color || item.fill;
+          } else if (item && item.status) {
+            const st = String(item.status).toLowerCase();
+            if (st === "grey" || st === "gray") color = "#999999";
+            else if (st === "green") color = "#00cc66";
+            else if (st === "black") color = "#000000";
+            else if (st === "red") color = "#cc3333";
+            else color = DEFAULT_FILL_COLOR;
+          }
+
+          // Fixed position selection (overflow reuses last slot)
+          const pos =
+            i < POSITIONS.length
+              ? POSITIONS[i]
+              : POSITIONS[POSITIONS.length - 1];
+          const x = pos.x;
+          const y = pos.y;
+
+          // Draw filled circle (no stroke)
+          ctx.beginPath();
+          ctx.arc(x, y, RADIUS, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+
+          // Friendly label (prefer assetLabels), always solid white and centered on the ball
+          let label = "";
+          if (assetLabels && name && assetLabels[name])
+            label = assetLabels[name];
+          else if (name) label = String(name).replace(/_/g, " ");
+          else if (item && (item.text || item.label))
+            label = item.text || item.label;
+
+          if (label) {
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 12px 'Courier New', monospace";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(label, x, y); // intentionally drawn on top of the ball
+          }
+        }
+
+        ctx.restore();
+      }
+
+		function PA_initListeningButtons() {
+		  var listenBtn = document.getElementById("listenButton");
+		  var playListenBtn = document.getElementById("playListenButton");
+
+		  if (listenBtn && !listenBtn.dataset.bound) {
+			listenBtn.dataset.bound = "1";
+			if (!listenBtn.dataset.orig) listenBtn.dataset.orig = listenBtn.textContent || "▶ LISTEN";
+
+			listenBtn.addEventListener("click", function (e) {
+			  e && e.preventDefault();
+			  try {
+				var audioIsPlaying = (typeof AP_isAudioActuallyPlaying === "function")
+				  ? AP_isAudioActuallyPlaying()
+				  : (!audioElement.paused && !audioElement.ended && audioElement.currentTime > 0);
+
+				if (audioIsPlaying) {
+				  audioElement.pause();
+				} else {
+				  if (!audioElement.src || !audioElement.src.includes("The_Visitor.mp3")) {
+					audioElement.src = ASSET_BASE_URL + "The_Visitor.mp3";
+					try { audioElement.load(); } catch (err) { console.warn(err); }
+				  }
+				  audioElement.play().catch(function (err) {
+					console.error("Listen: play() rejected", err);
+					var statusEl = document.getElementById("loadingStatus");
+					if (statusEl) statusEl.textContent = "Music could not be played — see console";
+				  });
+				}
+			  } catch (err) {
+				console.error("Listen button handler error", err);
+			  }
+			});
+
+			listenBtn.addEventListener("touchstart", function (e) {
+			  e.preventDefault();
+			  listenBtn.click();
+			}, { passive: false });
+		  }
+
+		  if (playListenBtn && !playListenBtn.dataset.bound) {
+			playListenBtn.dataset.bound = "1";
+			if (!playListenBtn.dataset.orig) playListenBtn.dataset.orig = playListenBtn.textContent || "▶ PLAY&LISTEN";
+
+			playListenBtn.addEventListener("click", function (e) {
+			  e && e.preventDefault();
+			  try {
+				var audioIsPlaying = (typeof AP_isAudioActuallyPlaying === "function")
+				  ? AP_isAudioActuallyPlaying()
+				  : (!audioElement.paused && !audioElement.ended && audioElement.currentTime > 0);
+
+				if (audioIsPlaying) {
+				  audioElement.pause();
+				} else {
+				  // reset teleprompter state and start audio
+				  currentIndex = 0;
+				  songLineNumber = 1;
+				  bounceCount = 0;
+				  songPaused = false;
+				  waitingForStart = false;
+				  bounceStartTime = performance.now() / 1000;
+
+				  if (!audioElement.src || !audioElement.src.includes("The_Visitor.mp3")) {
+					audioElement.src = ASSET_BASE_URL + "The_Visitor.mp3";
+					try { audioElement.load(); } catch (err) { console.warn(err); }
+				  }
+				  try { audioElement.currentTime = 0; } catch (err) { /* ignore */ }
+
+				  audioElement.play().catch(function (err) {
+					console.error("Play&Listen: play() rejected", err);
+					var statusEl = document.getElementById("loadingStatus");
+					if (statusEl) statusEl.textContent = "Music could not be played — see console";
+				  });
+				  AP_updatePlayButton();
+				}
+			  } catch (err) {
+				console.error("Play&Listen handler error", err);
+			  }
+			});
+
+			playListenBtn.addEventListener("touchstart", function (e) {
+			  e.preventDefault();
+			  playListenBtn.click();
+			}, { passive: false });
+		  }
+		}
+		// Call it immediately so handlers are always installed (no unnamed IIFE)
+		PA_initListeningButtons();
+
+    </script>
+  </body>
+</html>
