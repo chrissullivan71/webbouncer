@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: GitHub Account Support
+    url: https://support.github.com/
+    about: For GitHub account issues (password, billing, account cancellation), please contact GitHub Support
+  - name: GitHub Settings
+    url: https://github.com/settings/
+    about: Manage your GitHub account settings, including account deletion
