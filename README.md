@@ -14,7 +14,7 @@ Bouncing Ball Teleprompter is a client-side web application that helps performer
 
 ## Getting Started
 
-1. Open `performv14_renamed.html` (or any of the HTML files) in a web browser
+1. Open `performv14_renamed.html` in a web browser (this is the main application file)
 2. Select a song/text file using the dropdown selector
 3. Press the Play button or click the canvas to start
 4. Use the control buttons to adjust tempo, pause, or restart
@@ -58,7 +58,7 @@ All data is stored locally on your device. The application does not send any inf
 
 ### How do I add my own songs?
 
-Create a text file following the song format used in the existing `.txt` files in the repository. The format includes sections, chords, lyrics, and beat timing information.
+Create a text file following the song format used in the existing `.txt` files in the repository. The format includes sections, chords, lyrics, and beat timing information. See `the-visitor.txt` or `dont_think_twice.txt` for examples of the expected format structure.
 
 ### Is this free to use?
 
