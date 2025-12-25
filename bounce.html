@@ -1009,6 +1009,7 @@ Theres a cricket on the twentieth floor
         function getRidOfLL(cleanedLine) {
             cleanedLine = cleanedLine.replace(/\t/g, '    ');
             
+            // Handle both LL (lyric lines) and NB (no beat/instrumental lines)
             if (cleanedLine.includes('LL')) {
                 const llIndex = cleanedLine.indexOf('LL');
                 cleanedLine = cleanedLine.substring(0, llIndex).trimEnd();
@@ -1016,6 +1017,14 @@ Theres a cricket on the twentieth floor
                 if (cleanedLine.includes('ZZZ')) {
                     const zzzIndex = cleanedLine.indexOf('ZZZ');
                     cleanedLine = cleanedLine.substring(0, zzzIndex).trimEnd();
+                }
+            } else if (cleanedLine.includes('NB')) {
+                const nbIndex = cleanedLine.indexOf('NB');
+                cleanedLine = cleanedLine.substring(0, nbIndex).trimEnd();
+                
+                if (cleanedLine.includes('I01')) {
+                    const i01Index = cleanedLine.indexOf('I01');
+                    cleanedLine = cleanedLine.substring(0, i01Index).trimEnd();
                 }
             }
             return cleanedLine;
@@ -1346,9 +1355,9 @@ Theres a cricket on the twentieth floor
             
             const pattern = /[a-zA-Z\s]+/;
             if (pattern.test(cleanedLine)) {
-                if (!cleanedLine.includes('ZZZ')) {
+                if (!cleanedLine.includes('ZZZ') && !cleanedLine.includes('I01')) {
                     return "lyrics";
-                } else if (cleanedLine.includes('ZZZ')) {
+                } else if (cleanedLine.includes('ZZZ') || cleanedLine.includes('I01')) {
                     return "beats";
                 }
             }
